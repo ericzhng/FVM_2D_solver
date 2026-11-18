@@ -122,6 +122,28 @@ Measured single-node numbers (this machine, 16 logical cores, 80k cells):
 | Roe face fluxes, 16 threads | 39 ms | ~2 ms |
 | full RK2 step, 10k cells | 79 ms | ~1.5 ms |
 
+Measured MPI strong scaling (Microsoft MPI 10.1, mpi4py 4.1, one numba thread
+per rank, 180,000 cells, Roe + RK2, Intel i7-10700K: 8 cores / 16 threads, idle
+machine; `utility/bench_scaling.py --n 300 --steps 40`, two independent runs):
+
+| Ranks | Run 1 ms/step | Run 2 ms/step | Speedup (run 1 / run 2) | Efficiency (run 1 / run 2) |
+| --- | --- | --- | --- | --- |
+| 1 | 100.0 | 90.7 | 1.00 / 1.00 | 100% / 100% |
+| 2 | 70.8 | 69.2 | 1.41 / 1.31 | 71% / 66% |
+| 4 | 41.7 | 41.7 | 2.40 / 2.18 | 60% / 54% |
+| 8 | 29.2 | 27.2 | 3.42 / 3.34 | 43% / 42% |
+
+Setup (global BCs + domain build) is 0.02-0.2 s and excluded. The limit is the
+hardware, not communication: a control where every rank solves the *same* full
+180k-cell problem with no communication slows from 44 ms (1-2 ranks) to 53 ms
+(4) and 107-112 ms (8) per residual, i.e. concurrent ranks contend for shared
+memory bandwidth / cache (the geometry alone is ~60 MB against a 16 MB L3).
+Decomposition helps beyond that because each rank's working set shrinks. At
+20k cells, where the working set is cache-resident, the residual itself scales
+near-ideally (6.4 / 3.3 / 1.75 ms on 1 / 2 / 4 ranks), and halo-exchange
+latency is only 8-34 us. Expect better efficiency across several nodes (each
+brings its own memory bandwidth) than on one node.
+
 Threaded scaling of the numba kernels is limited (about 3x on 16 threads at
 180k cells: they are memory-bound), which is exactly where decomposition
 helps: each rank's working set is small and cache-resident.
