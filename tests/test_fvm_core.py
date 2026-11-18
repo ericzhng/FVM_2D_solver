@@ -23,36 +23,8 @@ from src.solver import solve  # noqa: E402
 
 
 def make_grid_mesh(n=4):
-    """Unit square split into ``2 n^2`` triangles; boundary groups left/right/bottom/top."""
-    xs = np.linspace(0, 1, n + 1)
-    X, Y = np.meshgrid(xs, xs)
-    coords = np.zeros(((n + 1) ** 2, 3))
-    coords[:, 0], coords[:, 1] = X.ravel(), Y.ravel()
-    idx = lambda i, j: j * (n + 1) + i  # noqa: E731
-    tris = []
-    for j in range(n):
-        for i in range(n):
-            a, b, c, d = idx(i, j), idx(i + 1, j), idx(i + 1, j + 1), idx(i, j + 1)
-            tris += [[a, b, c], [a, c, d]]
-    m = Mesh()
-    m.node_tags = np.arange(1, len(coords) + 1, dtype=np.uint64)
-    m.node_coords = coords
-    m.elem_conn = np.array(tris, dtype=np.uint64) + 1
-    m.elem_tags = np.arange(1, len(tris) + 1)
-    m.nnode, m.nelem, m.dim = len(coords), len(tris), 2
-    m.analyze_mesh()
-
-    ii, jj = np.nonzero(m.cell_neighbors == -1)
-    mid = m.face_midpoints[ii, jj]
-    tags = np.select(
-        [np.isclose(mid[:, 0], 0), np.isclose(mid[:, 0], 1), np.isclose(mid[:, 1], 0)],
-        [1, 2, 3],
-        4,
-    )
-    m.boundary_faces_nodes = np.sort(m.elem_faces[ii, jj], axis=1)
-    m.boundary_faces_tags = tags
-    m.boundary_tag_map = {"left": 1, "right": 2, "bottom": 3, "top": 4}
-    return m
+    """Unit square split into ``2 n^2`` triangles; groups left/right/bottom/top."""
+    return Mesh.unit_square(n)
 
 
 def cons(r, u, v, p, gamma=1.4):

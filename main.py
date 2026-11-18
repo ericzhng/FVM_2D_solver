@@ -1,4 +1,5 @@
-from src.mesh import Mesh, plot_mesh
+from src.mesh import Mesh, plot_mesh  # noqa: F401
+from src.parallel import get_comm
 from src.solver import solve
 from src.case_setup import setup_case_shallow_water, setup_case_euler
 from src.visualization import plot_simulation_step, create_animation
@@ -17,16 +18,24 @@ def main():
     4.  Visualizes the results.
     """
 
+    # Run serially with ``python main.py`` or in parallel with
+    # ``mpiexec -n 4 python main.py`` (needs mpi4py; each rank holds a subdomain).
+    comm = get_comm()
+    root = comm.rank == 0
+
     # --- 1. Initialize and Read Mesh ---
-    print("Initializing and reading mesh...")
+    if root:
+        print("Initializing and reading mesh...")
     mesh = Mesh()
     mesh.read_mesh("data/euler_mesh.msh")
     mesh.analyze_mesh()
-    mesh.summary()
+    if root:
+        mesh.summary()
     # plot_mesh(mesh)  # Optional: Uncomment to visualize the mesh and check normals
 
     # --- 2. Set Up Case ---
-    print("Setting up the simulation case...")
+    if root:
+        print("Setting up the simulation case...")
     equation_type = "euler"  # Choose 'shallow_water' or 'euler'
 
     if equation_type == "shallow_water":
@@ -41,7 +50,8 @@ def main():
         raise ValueError("Invalid equation type specified.")
 
     # --- 3. Solve ---
-    print("Starting the FVM solver...")
+    if root:
+        print("Starting the FVM solver...")
     history, dt_history = solve(
         mesh,
         U_init,
@@ -54,7 +64,10 @@ def main():
         use_adaptive_dt=True,
         cfl=0.5,
         dt_initial=1e-2,
+        comm=comm,
     )
+    if not root:  # only rank 0 receives the assembled states
+        return
     print("Solver finished.")
 
     # --- 4. Visualize ---

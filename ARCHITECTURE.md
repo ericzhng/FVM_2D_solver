@@ -51,11 +51,14 @@ Hot loops are numba-compiled and parallel over cells.
 | `residual.py` | `compute_residual(U, geo, ...)`: gradient → limiter → MUSCL face states → Riemann flux once per unique face → per-cell gather. The only spatial-discretisation entry point. |
 | `euler_equations.py`, `shallow_water_equations.py` | numba `jitclass` equation systems with a common interface: `max_eigenvalue`, `roe_flux`, `hllc_flux`, `apply_boundary_condition`. |
 | `time_step.py` | CFL time step and the explicit integrators (`INTEGRATORS`: `euler`, `rk2`). |
-| `solver.py` | `solve(...)`: wires the pieces together and runs the loop. |
+| `solver.py` | `solve(...)`: wires the pieces together and runs the loop (serial or distributed via `comm=`). |
+| `partition.py` | Domain decomposition: RCB partitioner, two-ring halos, local geometry/face tables, halo exchange plan (`Domain`). |
+| `parallel.py` | Communicator interface: `SerialComm`, `MPIComm` (mpi4py, lazy import), `get_comm()`. |
 | `case_setup.py` | Initial conditions and BC dictionaries for the demo cases. |
 | `visualization.py` | Matplotlib snapshots and animation. |
 
-`main.py` is the script entry point; `utility/` holds gmsh mesh generators;
+`main.py` is the script entry point; `utility/` holds gmsh mesh generators and
+`bench_scaling.py` (benchmark / parallel-vs-serial check);
 `tests/` is pytest.
 
 ## Conventions
@@ -81,6 +84,45 @@ Hot loops are numba-compiled and parallel over cells.
   `INTEGRATORS`.
 - **New BC type**: extend `BC_TYPE_MAP`, `create_numba_bcs` and each equation's
   `apply_boundary_condition`.
+
+## Parallel execution
+
+Two levels, which can be combined:
+
+- **Shared memory (numba threads).** Kernels are `prange` loops over blocks of
+  cells/faces; scratch buffers are allocated once per block (allocation
+  serialises threads). Control with `NUMBA_NUM_THREADS`.
+- **Distributed memory (MPI).** `mpiexec -n P python main.py` (needs `mpi4py`,
+  see `requirements-mpi.txt`). Every rank builds the global mesh, then
+  `partition.build_domain` keeps owned cells + two halo rings. A residual
+  evaluation does **one** halo exchange of `U` (non-blocking, point-to-point);
+  a time step does two (RK2) plus one `allreduce(min)` for the CFL step.
+  Gradients/limiters run on owned + ring 1, fluxes only on faces touching an
+  owned cell, so redundant work is small (180k cells on 64 ranks: <=5% extra
+  gradient work, <=2.5% extra flux work, <=16 messages of <25 KB per rank).
+  Local cells keep ascending global order, so a shared face is evaluated from
+  the same side as in a serial run: **results are bitwise identical to serial**
+  for any rank count (verified for 2-6 ranks).
+
+With many ranks per node use one numba thread per rank
+(`NUMBA_NUM_THREADS=1`) to avoid oversubscription. `solve(..., comm=comm)`
+returns assembled global states on rank 0 only.
+
+`python utility/bench_scaling.py --n 400 --steps 40 [--check]` reports ms/step
+and (with `--check`) the difference to a serial solve; run it under `mpiexec`
+with increasing `-n` for a strong-scaling table.
+
+Measured single-node numbers (this machine, 16 logical cores, 80k cells):
+
+| Kernel | before | after |
+| --- | --- | --- |
+| Roe face fluxes, 1 thread | 264 ms | ~10 ms |
+| Roe face fluxes, 16 threads | 39 ms | ~2 ms |
+| full RK2 step, 10k cells | 79 ms | ~1.5 ms |
+
+Threaded scaling of the numba kernels is limited (about 3x on 16 threads at
+180k cells: they are memory-bound), which is exactly where decomposition
+helps: each rank's working set is small and cache-resident.
 
 ## Design notes
 
@@ -111,7 +153,17 @@ Hot loops are numba-compiled and parallel over cells.
 - Solver kernels are 2D only (`fvm_geometry` raises for other dimensions).
 - Inlet/outlet conditions are simple primitive-variable Dirichlet ghost states,
   not characteristic (non-reflecting) conditions; strong waves can reflect.
-- `history` stores every `save_every`-th step in memory.
+- `history` stores every `save_every`-th step in memory; with MPI it is gathered
+  on rank 0 at each saved step (use a large `save_every` for big runs).
+- MPI: every rank holds the *global* mesh during setup (O(N) memory per rank);
+  the partitioner is geometric (RCB), not graph-based (METIS); communication is
+  not overlapped with computation; the shallow-water fluxes are not yet
+  allocation-free.
+- The distributed logic is verified with thread-simulated ranks
+  (`tests/thread_comm.py`), including with compiled numba kernels. The real
+  `mpi4py` wrapper (`MPIComm`) is a thin layer over the same interface but has
+  not been exercised in CI; run `bench_scaling.py --check` under `mpiexec` to
+  confirm on your cluster.
 
 ## Testing
 
@@ -119,5 +171,6 @@ Hot loops are numba-compiled and parallel over cells.
 and covers: neighbour search and the unique-face table, per-face BC resolution,
 free-stream preservation, global conservation, least-squares exactness on a
 skewed mesh, near-wall gradient exactness, Roe shear-wave upwinding, inlet/outlet ghost states, area
-centroids and `save_every`. `tests/test_euler_equations.py` checks flux
+centroids, `save_every`, partitioning/halo plans and
+distributed-vs-serial equality (`tests/test_parallel.py`). `tests/test_euler_equations.py` checks flux
 consistency and upwinding.

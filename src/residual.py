@@ -95,12 +95,13 @@ def _face_fluxes(geo, U, gradients, limiters, equation, flux_id, bc_type, bc_val
 
 @numba.njit(parallel=True)
 def _gather_residual(geo, face_flux):
-    """``R_i = 1/V_i * sum_f sign_if * F_f`` (conflict-free gather per cell)."""
+    """``R_i = 1/V_i * sum_f sign_if * F_f`` for the owned cells (conflict-free)."""
     nelem = geo.neighbors.shape[0]
     nfaces = geo.neighbors.shape[1]
     nvars = face_flux.shape[1]
     residual = np.zeros((nelem, nvars))
-    for i in prange(nelem):
+    for c in prange(geo.owned_cells.shape[0]):
+        i = geo.owned_cells[c]
         if geo.volumes[i] <= 1e-12:
             continue
         for j in range(nfaces):

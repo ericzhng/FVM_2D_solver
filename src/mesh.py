@@ -26,6 +26,9 @@ class FVMGeometry(NamedTuple):
         face_sign: ``+1`` if the cell owns the face, ``-1`` otherwise.
         owner_cell: Owning cell of each unique face.
         owner_local: Local face index (within the owner) of each unique face.
+        grad_cells: Cells whose gradient/limiter are computed (all cells in a
+            serial run; owned + first halo ring in a distributed run).
+        owned_cells: Cells whose residual is assembled.
     """
 
     neighbors: np.ndarray
@@ -42,6 +45,8 @@ class FVMGeometry(NamedTuple):
     face_sign: np.ndarray
     owner_cell: np.ndarray
     owner_local: np.ndarray
+    grad_cells: np.ndarray
+    owned_cells: np.ndarray
 
 
 class Mesh:
@@ -75,6 +80,42 @@ class Mesh:
         self.boundary_tag_map = {}
         self.cell_neighbors = np.array([])
         self.elem_faces = np.array([])
+
+    @classmethod
+    def unit_square(cls, n=4):
+        """Build an analysed ``n x n`` triangle mesh of the unit square (no gmsh).
+
+        Boundary groups are ``left`` / ``right`` / ``bottom`` / ``top``. Handy for
+        tests and benchmarks.
+        """
+        xs = np.linspace(0.0, 1.0, n + 1)
+        X, Y = np.meshgrid(xs, xs)
+        coords = np.zeros(((n + 1) ** 2, 3))
+        coords[:, 0], coords[:, 1] = X.ravel(), Y.ravel()
+        ii, jj = np.meshgrid(np.arange(n), np.arange(n))
+        a = (jj * (n + 1) + ii).ravel()
+        b, c, d = a + 1, a + n + 2, a + n + 1
+        tris = np.stack([np.stack([a, b, c], 1), np.stack([a, c, d], 1)], 1).reshape(-1, 3)
+
+        m = cls()
+        m.node_tags = np.arange(1, len(coords) + 1, dtype=np.uint64)
+        m.node_coords = coords
+        m.elem_conn = (tris + 1).astype(np.uint64)
+        m.elem_tags = np.arange(1, len(tris) + 1)
+        m.nnode, m.nelem, m.dim = len(coords), len(tris), 2
+        m.analyze_mesh()
+
+        fi, fj = np.nonzero(m.cell_neighbors == -1)
+        mid = m.face_midpoints[fi, fj]
+        tags = np.select(
+            [np.isclose(mid[:, 0], 0), np.isclose(mid[:, 0], 1), np.isclose(mid[:, 1], 0)],
+            [1, 2, 3],
+            4,
+        )
+        m.boundary_faces_nodes = np.sort(m.elem_faces[fi, fj], axis=1)
+        m.boundary_faces_tags = tags
+        m.boundary_tag_map = {"left": 1, "right": 2, "bottom": 3, "top": 4}
+        return m
 
     def read_mesh(self, mesh_file):
         """
@@ -503,6 +544,8 @@ class Mesh:
             face_sign=np.ascontiguousarray(self.face_sign),
             owner_cell=np.ascontiguousarray(self.owner_cell),
             owner_local=np.ascontiguousarray(self.owner_local),
+            grad_cells=np.arange(self.nelem),
+            owned_cells=np.arange(self.nelem),
         )
 
     def get_mesh_quality(self, metric="aspect_ratio"):

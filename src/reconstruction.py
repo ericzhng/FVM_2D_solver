@@ -79,10 +79,12 @@ def compute_gradients_lsq(geo, U, equation, bc_type, bc_value):
     nelem, nvars = U.shape
     nfaces = geo.neighbors.shape[1]
     gradients = np.zeros((nelem, nvars, 2))
-    nblocks = (nelem + _BLOCK - 1) // _BLOCK
+    ncells = geo.grad_cells.shape[0]
+    nblocks = (ncells + _BLOCK - 1) // _BLOCK
     for blk in prange(nblocks):
         normal = np.empty(2)
-        for i in range(blk * _BLOCK, min((blk + 1) * _BLOCK, nelem)):
+        for c in range(blk * _BLOCK, min((blk + 1) * _BLOCK, ncells)):
+            i = geo.grad_cells[c]
             for j in range(nfaces):
                 nb = geo.neighbors[i, j]
                 if nb != -1:
@@ -125,12 +127,14 @@ def compute_limiters(geo, U, gradients, limiter_code, venkat_k, equation, bc_typ
     nelem, nvars = U.shape
     nfaces = geo.neighbors.shape[1]
     limiters = np.ones((nelem, nvars))
-    nblocks = (nelem + _BLOCK - 1) // _BLOCK
+    ncells = geo.grad_cells.shape[0]
+    nblocks = (ncells + _BLOCK - 1) // _BLOCK
     for blk in prange(nblocks):
         u_hi = np.empty(nvars)
         u_lo = np.empty(nvars)
         normal = np.empty(2)
-        for i in range(blk * _BLOCK, min((blk + 1) * _BLOCK, nelem)):
+        for c in range(blk * _BLOCK, min((blk + 1) * _BLOCK, ncells)):
+            i = geo.grad_cells[c]
             eps2 = (venkat_k * np.sqrt(geo.volumes[i])) ** 3
             # Bounds from the cell, its neighbours and its boundary ghost states.
             for k in range(nvars):
