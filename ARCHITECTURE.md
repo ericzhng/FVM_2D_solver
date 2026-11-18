@@ -91,8 +91,12 @@ Hot loops are numba-compiled and parallel over cells.
 - **Gradients.** Weighted least squares is the default: exact for linear fields
   on any mesh. Green-Gauss with linear interpolation is *not* exact on skewed
   meshes and its non-orthogonal correction measurably increased the error, so
-  that correction (`over_relaxation`) is off by default. Boundary faces add a
-  zero-difference virtual neighbour so corner cells stay well conditioned.
+  that correction (`over_relaxation`) is off by default. Every boundary face
+  adds a *virtual neighbour* (the cell centroid mirrored across the face) whose
+  value is the boundary-condition ghost state of the cell, so wall cells see the
+  reflected normal velocity (exact for wall-consistent linear fields), outflow
+  cells see zero difference, and corner cells stay well conditioned. The limiter
+  includes the same ghost states in its min/max bounds.
 - **Limiters.** Both are bound-based, with `phi` in `[0, 1]`. Ratio limiters
   (minmod, superbee) do not fit this formulation (minmod was identical to
   Barth-Jespersen and superbee could exceed the bound), so they were removed;
@@ -105,8 +109,6 @@ Hot loops are numba-compiled and parallel over cells.
 ## Known limitations
 
 - Solver kernels are 2D only (`fvm_geometry` raises for other dimensions).
-- Wall boundaries use a zero-gradient virtual neighbour in the gradient, i.e.
-  the boundary reconstruction is first-order-like near walls.
 - Inlet/outlet conditions are simple primitive-variable Dirichlet ghost states,
   not characteristic (non-reflecting) conditions; strong waves can reflect.
 - `history` stores every `save_every`-th step in memory.
@@ -116,6 +118,6 @@ Hot loops are numba-compiled and parallel over cells.
 `python -m pytest tests`. `tests/test_fvm_core.py` uses small in-memory meshes
 and covers: neighbour search and the unique-face table, per-face BC resolution,
 free-stream preservation, global conservation, least-squares exactness on a
-skewed mesh, Roe shear-wave upwinding, inlet/outlet ghost states, area
+skewed mesh, near-wall gradient exactness, Roe shear-wave upwinding, inlet/outlet ghost states, area
 centroids and `save_every`. `tests/test_euler_equations.py` checks flux
 consistency and upwinding.

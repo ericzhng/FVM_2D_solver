@@ -146,12 +146,21 @@ def compute_residual(
         Residual array, shape ``(nelem, nvars)``.
     """
     if gradient == "least_squares":
-        gradients = compute_gradients_lsq(geo, U)
+        gradients = compute_gradients_lsq(geo, U, equation, bc_type, bc_value)
     elif gradient == "green_gauss":
         gradients = compute_gradients_gaussian(geo, U, over_relaxation)
     else:
         raise ValueError(f"Unknown gradient method '{gradient}'. Choose from {GRADIENT_METHODS}.")
-    limiters = compute_limiters(geo, U, gradients, limiter_code(limiter), venkat_k)
+    limiters = compute_limiters(
+        geo,
+        U,
+        gradients,
+        limiter_code(limiter),
+        venkat_k,
+        equation,
+        bc_type,
+        bc_value,
+    )
     face_flux = _face_fluxes(
         geo, U, gradients, limiters, equation, flux_code(flux), bc_type, bc_value
     )

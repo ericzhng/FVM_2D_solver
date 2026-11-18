@@ -20,7 +20,8 @@ class FVMGeometry(NamedTuple):
         weights: Linear interpolation weight of the *own* cell at the face.
         nonorth: Scalar non-orthogonal gradient-correction coefficient.
         lsq: Least-squares gradient coefficients, ``(nelem, nfaces, 2)``:
-            ``grad_i = sum_j lsq[i, j] * (U_nb(j) - U_i)`` over interior faces.
+            ``grad_i = sum_j lsq[i, j] * (U_j - U_i)`` where ``U_j`` is the
+            neighbour value, or the boundary ghost state on boundary faces.
         face_id: Unique-face index of every ``[cell, face]``.
         face_sign: ``+1`` if the cell owns the face, ``-1`` otherwise.
         owner_cell: Owning cell of each unique face.
@@ -430,13 +431,18 @@ class Mesh:
     def _compute_lsq_coefficients(self):
         """Weighted least-squares gradient coefficients (exact for linear fields).
 
-        Boundary faces add a mirrored virtual neighbour with zero difference
-        (zero-gradient ghost), which keeps corner cells well conditioned.
+        Every boundary face contributes a *virtual neighbour*: the cell centroid
+        mirrored across the face line, ``c + 2 ((m - c) . n) n``. Its value is
+        the boundary-condition ghost state, supplied at run time (reflected for
+        walls, zero-difference for transmissive), so near-wall gradients honour
+        the boundary condition and corner cells stay well conditioned.
         """
         nb = np.maximum(self.cell_neighbors, 0)
         has_nb = self.cell_neighbors != -1
         d_real = (self.cell_centroids[nb] - self.cell_centroids[:, None, :])[..., :2]
-        d_virt = 2.0 * (self.face_midpoints - self.cell_centroids[:, None, :])[..., :2]
+        r = (self.face_midpoints - self.cell_centroids[:, None, :])[..., :2]
+        n = self.face_normals[..., :2]
+        d_virt = 2.0 * np.einsum("ijk,ijk->ij", r, n)[..., None] * n
         d = np.where(has_nb[..., None], d_real, d_virt)
         dist2 = np.maximum((d**2).sum(axis=2), 1e-300)
         w2 = 1.0 / dist2  # (1/|d|)^2
@@ -446,8 +452,7 @@ class Mesh:
         Ainv = np.empty_like(A)
         Ainv[:, 0, 0], Ainv[:, 1, 1] = A[:, 1, 1] / det, A[:, 0, 0] / det
         Ainv[:, 0, 1] = Ainv[:, 1, 0] = -A[:, 0, 1] / det
-        coef = np.einsum("ikl,ijl->ijk", Ainv, w2[..., None] * d)
-        self.lsq_coef = np.where(has_nb[..., None], coef, 0.0)
+        self.lsq_coef = np.einsum("ikl,ijl->ijk", Ainv, w2[..., None] * d)
 
     def _compute_reconstruction_geometry(self):
         """Precompute the static coefficients used by the gradient kernel.

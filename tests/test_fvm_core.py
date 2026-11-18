@@ -128,6 +128,13 @@ def test_unknown_limiter_raises():
         limiter_code("nope")
 
 
+def _transmissive_bcs(m):
+    bcs = create_numba_bcs(
+        {k: {"type": "transmissive"} for k in m.boundary_tag_map}, m.boundary_tag_map
+    )
+    return build_face_bcs(m, bcs)
+
+
 def _skewed_mesh(n=8, seed=0):
     m = make_grid_mesh(n)
     rng = np.random.default_rng(seed)
@@ -142,7 +149,8 @@ def test_lsq_gradient_exact_for_linear_field_on_skewed_mesh():
     m = _skewed_mesh()
     geo = m.fvm_geometry()
     U = (2 * geo.centroids[:, 0] - 3 * geo.centroids[:, 1] + 1)[:, None]
-    g = compute_gradients_lsq(geo, U)
+    bt, bv = _transmissive_bcs(m)
+    g = compute_gradients_lsq(geo, U, EulerEquations(1.4), bt, bv)
     interior = (geo.neighbors != -1).all(axis=1)
     np.testing.assert_allclose(
         g[interior, 0, :], np.broadcast_to([2.0, -3.0], (interior.sum(), 2)), atol=1e-10
@@ -233,3 +241,51 @@ def test_solve_save_every_keeps_total_time_and_final_state():
     assert len(sparse) < len(full)
     assert sum(dts_sparse) == pytest.approx(0.5) and sum(dts_full) == pytest.approx(0.5)
     np.testing.assert_allclose(sparse[-1], full[-1])
+
+
+def test_near_wall_gradient_honours_reflection_ghost():
+    """A wall-consistent linear field must have exact gradients in wall cells.
+
+    The field is even in y for rho, rho*u, E and odd for rho*v (as a reflecting
+    wall at y=0 implies). A zero-gradient virtual neighbour gets d(rho*v)/dy
+    wrong by 50%; the reflected ghost state recovers it exactly.
+    """
+    m = make_grid_mesh(8)
+    geo = m.fvm_geometry()
+    x, y = geo.centroids.T
+    U = np.stack([1 + 0.3 * x, 0.5 + 0.2 * x, 0.4 * y, 3 + 0.1 * x], axis=1)
+    exact = np.array([[0.3, 0.0], [0.2, 0.0], [0.0, 0.4], [0.1, 0.0]])
+    bcs = create_numba_bcs(
+        {
+            "bottom": {"type": "wall"},
+            "left": {"type": "transmissive"},
+            "right": {"type": "transmissive"},
+            "top": {"type": "transmissive"},
+        },
+        m.boundary_tag_map,
+    )
+    bt, bv = build_face_bcs(m, bcs)
+    free = geo.neighbors == -1
+    wall_only = (free.sum(axis=1) > 0) & ((free & (bt != 3)).sum(axis=1) == 0)
+    assert wall_only.sum() > 0
+    g = compute_gradients_lsq(geo, U, EulerEquations(1.4), bt, bv)
+    for i in np.nonzero(wall_only)[0]:
+        np.testing.assert_allclose(g[i], exact, atol=1e-10)
+
+
+def test_limiter_with_wall_ghosts_stays_in_range():
+    """Limiter values stay in [0, 1] when bounds include reflected wall ghosts."""
+    from src.reconstruction import compute_limiters
+
+    m = make_grid_mesh(8)
+    geo = m.fvm_geometry()
+    x, y = geo.centroids.T
+    U = np.stack([1 + 0.3 * x, 0.5 + 0.2 * x, 0.4 * y, 3 + 0.1 * x], axis=1)
+    bcs = create_numba_bcs(
+        {k: {"type": "wall"} for k in m.boundary_tag_map}, m.boundary_tag_map
+    )
+    bt, bv = build_face_bcs(m, bcs)
+    eq = EulerEquations(1.4)
+    g = compute_gradients_lsq(geo, U, eq, bt, bv)
+    phi = compute_limiters(geo, U, g, 0, 1.0, eq, bt, bv)
+    assert np.isfinite(phi).all() and phi.min() >= 0.0 and phi.max() <= 1.0

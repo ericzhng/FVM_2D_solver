@@ -11,6 +11,7 @@ from numba import prange
 from src.limiters import apply_limiter
 
 _EPS = 1e-9
+_BLOCK = 256  # cells per parallel task; scratch buffers are allocated once per block
 
 
 @numba.njit(parallel=True)
@@ -57,15 +58,20 @@ def compute_gradients_gaussian(geo, U, over_relaxation):
 
 
 @numba.njit(parallel=True)
-def compute_gradients_lsq(geo, U):
+def compute_gradients_lsq(geo, U, equation, bc_type, bc_value):
     """Compute gradients with weighted least squares (exact for linear fields).
 
-    The coefficients are geometry-only and precomputed by the mesh, so this is a
-    single pass over the neighbours.
+    The coefficients are geometry-only and precomputed by the mesh. On boundary
+    faces the neighbour value is the boundary-condition ghost state built from
+    the cell value, so near-wall gradients respect the BC (e.g. a reflected
+    normal velocity at a wall).
 
     Args:
         geo: Static mesh arrays.
         U: Conservative state, shape ``(nelem, nvars)``.
+        equation: Equation object providing ``apply_boundary_condition``.
+        bc_type: Per-face boundary type codes.
+        bc_value: Per-face boundary parameters.
 
     Returns:
         Gradients, shape ``(nelem, nvars, 2)``.
@@ -73,20 +79,32 @@ def compute_gradients_lsq(geo, U):
     nelem, nvars = U.shape
     nfaces = geo.neighbors.shape[1]
     gradients = np.zeros((nelem, nvars, 2))
-    for i in prange(nelem):
-        for j in range(nfaces):
-            nb = geo.neighbors[i, j]
-            if nb == -1:
-                continue
-            for k in range(nvars):
-                dU = U[nb, k] - U[i, k]
-                gradients[i, k, 0] += geo.lsq[i, j, 0] * dU
-                gradients[i, k, 1] += geo.lsq[i, j, 1] * dU
+    nblocks = (nelem + _BLOCK - 1) // _BLOCK
+    for blk in prange(nblocks):
+        normal = np.empty(2)
+        for i in range(blk * _BLOCK, min((blk + 1) * _BLOCK, nelem)):
+            for j in range(nfaces):
+                nb = geo.neighbors[i, j]
+                if nb != -1:
+                    for k in range(nvars):
+                        dU = U[nb, k] - U[i, k]
+                        gradients[i, k, 0] += geo.lsq[i, j, 0] * dU
+                        gradients[i, k, 1] += geo.lsq[i, j, 1] * dU
+                else:
+                    normal[0] = geo.normals[i, j, 0]
+                    normal[1] = geo.normals[i, j, 1]
+                    ghost = equation.apply_boundary_condition(
+                        U[i], normal, bc_type[i, j], bc_value[i, j]
+                    )
+                    for k in range(nvars):
+                        dU = ghost[k] - U[i, k]
+                        gradients[i, k, 0] += geo.lsq[i, j, 0] * dU
+                        gradients[i, k, 1] += geo.lsq[i, j, 1] * dU
     return gradients
 
 
 @numba.njit(parallel=True)
-def compute_limiters(geo, U, gradients, limiter_code, venkat_k):
+def compute_limiters(geo, U, gradients, limiter_code, venkat_k, equation, bc_type, bc_value):
     """Compute the bound-based limiter ``phi`` per cell and variable.
 
     The gradient is scaled so the value extrapolated to every face midpoint
@@ -98,6 +116,8 @@ def compute_limiters(geo, U, gradients, limiter_code, venkat_k):
         gradients: Output of a ``compute_gradients_*`` kernel.
         limiter_code: Integer code from :mod:`src.limiters`.
         venkat_k: Venkatakrishnan constant ``K`` (``eps2 = (K sqrt(V))^3``).
+        equation, bc_type, bc_value: Used to include boundary ghost states in the
+            min/max bounds (so a wall's reflected value does not clip the gradient).
 
     Returns:
         Limiter values in ``[0, 1]``, shape ``(nelem, nvars)``.
@@ -105,25 +125,42 @@ def compute_limiters(geo, U, gradients, limiter_code, venkat_k):
     nelem, nvars = U.shape
     nfaces = geo.neighbors.shape[1]
     limiters = np.ones((nelem, nvars))
-    for i in prange(nelem):
-        eps2 = (venkat_k * np.sqrt(geo.volumes[i])) ** 3
-        for k in range(nvars):
-            u_i = U[i, k]
-            u_max = u_i
-            u_min = u_i
+    nblocks = (nelem + _BLOCK - 1) // _BLOCK
+    for blk in prange(nblocks):
+        u_hi = np.empty(nvars)
+        u_lo = np.empty(nvars)
+        normal = np.empty(2)
+        for i in range(blk * _BLOCK, min((blk + 1) * _BLOCK, nelem)):
+            eps2 = (venkat_k * np.sqrt(geo.volumes[i])) ** 3
+            # Bounds from the cell, its neighbours and its boundary ghost states.
+            for k in range(nvars):
+                u_hi[k] = U[i, k]
+                u_lo[k] = U[i, k]
             for j in range(nfaces):
                 nb = geo.neighbors[i, j]
                 if nb != -1:
-                    u_max = max(u_max, U[nb, k])
-                    u_min = min(u_min, U[nb, k])
-            phi = 1.0
-            for j in range(nfaces):
-                diff = (
-                    gradients[i, k, 0] * geo.face_r[i, j, 0]
-                    + gradients[i, k, 1] * geo.face_r[i, j, 1]
-                )
-                if abs(diff) > _EPS:
-                    bound = u_max if diff > 0 else u_min
-                    phi = min(phi, apply_limiter(limiter_code, bound - u_i, diff, eps2))
-            limiters[i, k] = phi
+                    for k in range(nvars):
+                        u_hi[k] = max(u_hi[k], U[nb, k])
+                        u_lo[k] = min(u_lo[k], U[nb, k])
+                else:
+                    normal[0] = geo.normals[i, j, 0]
+                    normal[1] = geo.normals[i, j, 1]
+                    ghost = equation.apply_boundary_condition(
+                        U[i], normal, bc_type[i, j], bc_value[i, j]
+                    )
+                    for k in range(nvars):
+                        u_hi[k] = max(u_hi[k], ghost[k])
+                        u_lo[k] = min(u_lo[k], ghost[k])
+            for k in range(nvars):
+                u_i = U[i, k]
+                phi = 1.0
+                for j in range(nfaces):
+                    diff = (
+                        gradients[i, k, 0] * geo.face_r[i, j, 0]
+                        + gradients[i, k, 1] * geo.face_r[i, j, 1]
+                    )
+                    if abs(diff) > _EPS:
+                        bound = u_hi[k] if diff > 0 else u_lo[k]
+                        phi = min(phi, apply_limiter(limiter_code, bound - u_i, diff, eps2))
+                limiters[i, k] = phi
     return limiters
