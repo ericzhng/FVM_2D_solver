@@ -19,6 +19,12 @@ class FVMGeometry(NamedTuple):
         volumes: Cell areas.
         weights: Linear interpolation weight of the *own* cell at the face.
         nonorth: Scalar non-orthogonal gradient-correction coefficient.
+        lsq: Least-squares gradient coefficients, ``(nelem, nfaces, 2)``:
+            ``grad_i = sum_j lsq[i, j] * (U_nb(j) - U_i)`` over interior faces.
+        face_id: Unique-face index of every ``[cell, face]``.
+        face_sign: ``+1`` if the cell owns the face, ``-1`` otherwise.
+        owner_cell: Owning cell of each unique face.
+        owner_local: Local face index (within the owner) of each unique face.
     """
 
     neighbors: np.ndarray
@@ -30,6 +36,11 @@ class FVMGeometry(NamedTuple):
     volumes: np.ndarray
     weights: np.ndarray
     nonorth: np.ndarray
+    lsq: np.ndarray
+    face_id: np.ndarray
+    face_sign: np.ndarray
+    owner_cell: np.ndarray
+    owner_local: np.ndarray
 
 
 class Mesh:
@@ -128,8 +139,9 @@ class Mesh:
         self._compute_cell_centroids()
         self._compute_mesh_properties()
         self._compute_cell_volumes()
-        if self.dim >= 2:
+        if self.dim == 2:
             self._compute_reconstruction_geometry()
+            self._compute_lsq_coefficients()
 
     def _get_boundary_info(self, gmsh):
         """
@@ -174,8 +186,20 @@ class Mesh:
         # Gather all node coordinates for all elements.
         elem_nodes_coords = self.node_coords[elem_node_indices]
 
-        # Compute the mean over the nodes for each element to get the centroids.
-        self.cell_centroids = np.mean(elem_nodes_coords, axis=1)
+        if self.dim == 2:
+            # Area centroid of the polygon (equals the vertex mean for triangles).
+            x, y = elem_nodes_coords[:, :, 0], elem_nodes_coords[:, :, 1]
+            xn, yn = np.roll(x, -1, axis=1), np.roll(y, -1, axis=1)
+            cross = x * yn - xn * y
+            area6 = 3.0 * cross.sum(axis=1)
+            good = np.abs(area6) > 1e-30
+            safe = np.where(good, area6, 1.0)
+            cen = np.mean(elem_nodes_coords, axis=1)
+            cen[:, 0] = np.where(good, ((x + xn) * cross).sum(axis=1) / safe, cen[:, 0])
+            cen[:, 1] = np.where(good, ((y + yn) * cross).sum(axis=1) / safe, cen[:, 1])
+            self.cell_centroids = cen
+        else:
+            self.cell_centroids = np.mean(elem_nodes_coords, axis=1)
 
     def _compute_cell_volumes(self):
         """Computes the volume/area of each element."""
@@ -261,7 +285,13 @@ class Mesh:
         all_faces_nodes = self.elem_conn[:, face_nodes_def_arr]
         self.elem_faces = all_faces_nodes
 
-        self.cell_neighbors = self._find_cell_neighbors(all_faces_nodes)
+        (
+            self.cell_neighbors,
+            self.face_id,
+            self.face_sign,
+            self.owner_cell,
+            self.owner_local,
+        ) = self._build_face_table(all_faces_nodes)
 
         # Vectorized computation of face midpoints and distances
         face_node_indices = self.node_tag_map[self.elem_faces]
@@ -354,15 +384,18 @@ class Mesh:
                         self.face_tangentials[i, j] = tangent
 
     @staticmethod
-    def _find_cell_neighbors(elem_faces):
-        """Match identical faces between cells (vectorized).
+    def _build_face_table(elem_faces):
+        """Match identical faces between cells and number the unique faces.
 
         Args:
             elem_faces: Node tags per face, shape ``(nelem, nfaces, nodes_per_face)``.
 
         Returns:
-            ``(nelem, nfaces)`` array of neighbour cell indices, ``-1`` where the
-            face is on the boundary.
+            ``(neighbors, face_id, face_sign, owner_cell, owner_local)``:
+            ``neighbors`` is ``(nelem, nfaces)`` with ``-1`` on boundary faces;
+            ``face_id``/``face_sign`` map every ``[cell, face]`` to its unique
+            face and to ``+1`` (owner = lowest cell index) or ``-1``;
+            ``owner_cell``/``owner_local`` locate each unique face.
 
         Raises:
             ValueError: If a face is shared by more than two cells.
@@ -375,14 +408,46 @@ class Mesh:
         if counts.max() > 2:
             raise ValueError("Non-manifold mesh: a face is shared by more than 2 cells.")
         face_id = face_id.reshape(-1)
-        order = np.argsort(face_id, kind="stable")
+        order = np.argsort(face_id, kind="stable")  # ascending flat index per face
         sorted_id = face_id[order]
         paired = sorted_id[1:] == sorted_id[:-1]
         first, second = order[:-1][paired], order[1:][paired]
         neighbors = np.full(nelem * nfaces, -1, dtype=int)
         neighbors[first] = second // nfaces
         neighbors[second] = first // nfaces
-        return neighbors.reshape(nelem, nfaces)
+
+        starts = np.r_[0, np.flatnonzero(sorted_id[1:] != sorted_id[:-1]) + 1]
+        owner_flat = order[starts]
+        face_sign = np.where(owner_flat[face_id] == np.arange(nelem * nfaces), 1, -1)
+        return (
+            neighbors.reshape(nelem, nfaces),
+            face_id.reshape(nelem, nfaces),
+            face_sign.reshape(nelem, nfaces),
+            owner_flat // nfaces,
+            owner_flat % nfaces,
+        )
+
+    def _compute_lsq_coefficients(self):
+        """Weighted least-squares gradient coefficients (exact for linear fields).
+
+        Boundary faces add a mirrored virtual neighbour with zero difference
+        (zero-gradient ghost), which keeps corner cells well conditioned.
+        """
+        nb = np.maximum(self.cell_neighbors, 0)
+        has_nb = self.cell_neighbors != -1
+        d_real = (self.cell_centroids[nb] - self.cell_centroids[:, None, :])[..., :2]
+        d_virt = 2.0 * (self.face_midpoints - self.cell_centroids[:, None, :])[..., :2]
+        d = np.where(has_nb[..., None], d_real, d_virt)
+        dist2 = np.maximum((d**2).sum(axis=2), 1e-300)
+        w2 = 1.0 / dist2  # (1/|d|)^2
+        A = np.einsum("ij,ijk,ijl->ikl", w2, d, d)
+        det = A[:, 0, 0] * A[:, 1, 1] - A[:, 0, 1] ** 2
+        det = np.where(np.abs(det) > 1e-300, det, 1.0)
+        Ainv = np.empty_like(A)
+        Ainv[:, 0, 0], Ainv[:, 1, 1] = A[:, 1, 1] / det, A[:, 0, 0] / det
+        Ainv[:, 0, 1] = Ainv[:, 1, 0] = -A[:, 0, 1] / det
+        coef = np.einsum("ikl,ijl->ijk", Ainv, w2[..., None] * d)
+        self.lsq_coef = np.where(has_nb[..., None], coef, 0.0)
 
     def _compute_reconstruction_geometry(self):
         """Precompute the static coefficients used by the gradient kernel.
@@ -428,6 +493,11 @@ class Mesh:
             volumes=np.ascontiguousarray(self.cell_volumes),
             weights=np.ascontiguousarray(self.face_weights),
             nonorth=np.ascontiguousarray(self.face_nonorth),
+            lsq=np.ascontiguousarray(self.lsq_coef),
+            face_id=np.ascontiguousarray(self.face_id),
+            face_sign=np.ascontiguousarray(self.face_sign),
+            owner_cell=np.ascontiguousarray(self.owner_cell),
+            owner_local=np.ascontiguousarray(self.owner_local),
         )
 
     def get_mesh_quality(self, metric="aspect_ratio"):

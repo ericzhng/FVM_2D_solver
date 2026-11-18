@@ -69,7 +69,7 @@ def create_animation(
     # Create a triangulation for plotting
     triangles = []
     for conn in mesh.elem_conn:
-        node_indices = [np.where(mesh.node_tags == tag)[0][0] for tag in conn]
+        node_indices = [int(mesh.node_tag_map[tag]) for tag in conn]
         if len(node_indices) == 4:  # Quadrilateral
             triangles.append([node_indices[0], node_indices[1], node_indices[2]])
             triangles.append([node_indices[0], node_indices[2], node_indices[3]])
@@ -102,7 +102,7 @@ def create_animation(
     def update_frame(frame):
         """Updates the plot for each frame of the animation."""
         U = history[frame]
-        h = U[:, 0]
+        h = U[:, variable_to_plot]
         facecolors = []
         for i, h_val in enumerate(h):
             if len(mesh.elem_conn[i]) == 4:
@@ -116,7 +116,7 @@ def create_animation(
         return [tpc, time_text]
 
     # Create the animation
-    anim = animation.FuncAnimation(
+    anim = animation.FuncAnimation(  # keep a reference or it is garbage-collected
         fig,
         update_frame,
         frames=len(history),
@@ -129,3 +129,4 @@ def create_animation(
     # Save or show the animation
     # anim.save(filename, writer='imagemagick', fps=10)
     plt.show()
+    return anim

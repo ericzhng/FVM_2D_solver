@@ -148,16 +148,18 @@ class ShallowWaterEquations:
         # "outlet": 2
         # "wall": 3
         # "transmissive": 4
-        # Never mutate U_inside: the caller still uses it as the left state.
+        # Ghost states are built from primitives and never mutate U_inside.
         if bc_type == 1:
-            U_ghost = U_inside.copy()
-            U_ghost[1] = bc_value[0]
-            U_ghost[2] = bc_value[1]
-            return U_ghost
+            # Inlet: prescribed velocity, water depth from the interior.
+            h, u, v = self._cons_to_prim(U_inside)
+            return self._prim_to_cons(np.array([h, bc_value[0], bc_value[1]]))
         elif bc_type == 2:
-            U_ghost = U_inside.copy()
-            U_ghost[0] = bc_value[0]
-            return U_ghost
+            # Outlet: prescribed water depth (bc_value[1]); if not given (<= 0)
+            # keep the interior depth. Velocity from the interior.
+            h, u, v = self._cons_to_prim(U_inside)
+            if bc_value[1] > 0.0:
+                h = bc_value[1]
+            return self._prim_to_cons(np.array([h, u, v]))
         elif bc_type == 3:
             return self._apply_wall_bc(U_inside, normal)
         elif bc_type == 4:

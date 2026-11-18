@@ -1,6 +1,6 @@
-"""Second-order reconstruction: Green-Gauss gradients and slope limiting.
+"""Second-order reconstruction: cell gradients (least squares or Green-Gauss) and limiting.
 
-Both kernels are cell-parallel numba loops that read the static geometry from a
+All kernels are cell-parallel numba loops that read the static geometry from a
 :class:`src.mesh.FVMGeometry` bundle and write one entry per cell.
 """
 
@@ -57,8 +57,37 @@ def compute_gradients_gaussian(geo, U, over_relaxation):
 
 
 @numba.njit(parallel=True)
-def compute_limiters(geo, U, gradients, limiter_code):
-    """Compute the Barth-Jespersen style limiter ``phi`` per cell and variable.
+def compute_gradients_lsq(geo, U):
+    """Compute gradients with weighted least squares (exact for linear fields).
+
+    The coefficients are geometry-only and precomputed by the mesh, so this is a
+    single pass over the neighbours.
+
+    Args:
+        geo: Static mesh arrays.
+        U: Conservative state, shape ``(nelem, nvars)``.
+
+    Returns:
+        Gradients, shape ``(nelem, nvars, 2)``.
+    """
+    nelem, nvars = U.shape
+    nfaces = geo.neighbors.shape[1]
+    gradients = np.zeros((nelem, nvars, 2))
+    for i in prange(nelem):
+        for j in range(nfaces):
+            nb = geo.neighbors[i, j]
+            if nb == -1:
+                continue
+            for k in range(nvars):
+                dU = U[nb, k] - U[i, k]
+                gradients[i, k, 0] += geo.lsq[i, j, 0] * dU
+                gradients[i, k, 1] += geo.lsq[i, j, 1] * dU
+    return gradients
+
+
+@numba.njit(parallel=True)
+def compute_limiters(geo, U, gradients, limiter_code, venkat_k):
+    """Compute the bound-based limiter ``phi`` per cell and variable.
 
     The gradient is scaled so the value extrapolated to every face midpoint
     stays within the min/max of the cell and its neighbours.
@@ -66,17 +95,18 @@ def compute_limiters(geo, U, gradients, limiter_code):
     Args:
         geo: Static mesh arrays.
         U: Conservative state, shape ``(nelem, nvars)``.
-        gradients: Output of :func:`compute_gradients_gaussian`.
+        gradients: Output of a ``compute_gradients_*`` kernel.
         limiter_code: Integer code from :mod:`src.limiters`.
+        venkat_k: Venkatakrishnan constant ``K`` (``eps2 = (K sqrt(V))^3``).
 
     Returns:
-        Limiter values in ``[0, 1]`` (``[0, 2]`` for superbee), shape
-        ``(nelem, nvars)``.
+        Limiter values in ``[0, 1]``, shape ``(nelem, nvars)``.
     """
     nelem, nvars = U.shape
     nfaces = geo.neighbors.shape[1]
     limiters = np.ones((nelem, nvars))
     for i in prange(nelem):
+        eps2 = (venkat_k * np.sqrt(geo.volumes[i])) ** 3
         for k in range(nvars):
             u_i = U[i, k]
             u_max = u_i
@@ -94,6 +124,6 @@ def compute_limiters(geo, U, gradients, limiter_code):
                 )
                 if abs(diff) > _EPS:
                     bound = u_max if diff > 0 else u_min
-                    phi = min(phi, apply_limiter(limiter_code, (bound - u_i) / diff))
+                    phi = min(phi, apply_limiter(limiter_code, bound - u_i, diff, eps2))
             limiters[i, k] = phi
     return limiters

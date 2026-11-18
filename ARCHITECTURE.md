@@ -29,11 +29,12 @@ Hot loops are numba-compiled and parallel over cells.
                      └───────────────┬───────────────────────────┘
                                      v
                           residual.compute_residual(U)
-                     reconstruction.compute_gradients_gaussian
+                     reconstruction.compute_gradients_lsq  (or _gaussian)
                        -> reconstruction.compute_limiters (limiters.py)
-                       -> residual._flux_residual
+                       -> residual._face_fluxes   (once per unique face)
                               -> equation.roe_flux / hllc_flux
                                  equation.apply_boundary_condition
+                       -> residual._gather_residual (per cell, +/- sign)
                                      |
                                      v
                            visualization.* (history of U)
@@ -43,11 +44,11 @@ Hot loops are numba-compiled and parallel over cells.
 
 | Module | Responsibility |
 | --- | --- |
-| `mesh.py` | `Mesh`: reads gmsh files, builds all geometry/connectivity (vectorised). `FVMGeometry`: the contiguous 2D arrays handed to numba kernels. `plot_mesh` for debugging. `gmsh` is imported lazily, so geometry works (and is testable) without it. |
+| `mesh.py` | `Mesh`: reads gmsh files, builds all geometry/connectivity (vectorised): area centroids, unique-face table, least-squares coefficients. `FVMGeometry`: the contiguous 2D arrays handed to numba kernels. `plot_mesh` for debugging. `gmsh` is imported lazily, so geometry works (and is testable) without it. |
 | `boundary.py` | Boundary-condition vocabulary (`BC_TYPE_MAP`). `create_numba_bcs` turns the user dict into a structured array; `build_face_bcs` resolves it **once** into per-face `bc_type` / `bc_value` arrays. |
-| `limiters.py` | Slope-limiter functions, selected by integer code. |
-| `reconstruction.py` | Green-Gauss gradients and the limiter kernel (cell-parallel). |
-| `residual.py` | `compute_residual(U, geo, ...)`: gradient → limiter → MUSCL face states → Riemann flux → per-cell sum. The only spatial-discretisation entry point. |
+| `limiters.py` | Bound-based slope limiters (Barth-Jespersen, Venkatakrishnan), selected by integer code. |
+| `reconstruction.py` | Least-squares (default) and Green-Gauss gradients, plus the limiter kernel (cell-parallel). |
+| `residual.py` | `compute_residual(U, geo, ...)`: gradient → limiter → MUSCL face states → Riemann flux once per unique face → per-cell gather. The only spatial-discretisation entry point. |
 | `euler_equations.py`, `shallow_water_equations.py` | numba `jitclass` equation systems with a common interface: `max_eigenvalue`, `roe_flux`, `hllc_flux`, `apply_boundary_condition`. |
 | `time_step.py` | CFL time step and the explicit integrators (`INTEGRATORS`: `euler`, `rk2`). |
 | `solver.py` | `solve(...)`: wires the pieces together and runs the loop. |
@@ -81,28 +82,40 @@ Hot loops are numba-compiled and parallel over cells.
 - **New BC type**: extend `BC_TYPE_MAP`, `create_numba_bcs` and each equation's
   `apply_boundary_condition`.
 
-## Known limitations and follow-ups
+## Design notes
+
+- **Face-based fluxes.** Each unique face is evaluated once from its owner cell
+  (lowest cell index); the neighbour receives the negative flux in a
+  conflict-free per-cell gather (`face_id`, `face_sign`). Conservation holds by
+  construction (a closed wall domain conserves mass/energy to round-off).
+- **Gradients.** Weighted least squares is the default: exact for linear fields
+  on any mesh. Green-Gauss with linear interpolation is *not* exact on skewed
+  meshes and its non-orthogonal correction measurably increased the error, so
+  that correction (`over_relaxation`) is off by default. Boundary faces add a
+  zero-difference virtual neighbour so corner cells stay well conditioned.
+- **Limiters.** Both are bound-based, with `phi` in `[0, 1]`. Ratio limiters
+  (minmod, superbee) do not fit this formulation (minmod was identical to
+  Barth-Jespersen and superbee could exceed the bound), so they were removed;
+  `"minmod"` remains a deprecated alias.
+- **Boundary ghost states** are built from primitives and never mutate the
+  interior state: inlet = prescribed velocity (density, pressure from inside);
+  outlet = prescribed pressure (Euler) or water depth (shallow water), the rest
+  from inside; wall = reflection; transmissive = zero gradient.
+
+## Known limitations
 
 - Solver kernels are 2D only (`fvm_geometry` raises for other dimensions).
-- Cell "centroid" is the vertex mean; for non-triangular cells it is not the
-  area centroid.
-- `minmod` is mathematically identical to `barth_jespersen` in this
-  formulation (`r >= 0`), and `superbee` can return `phi > 1`, which breaks the
-  min/max bound the limiter is built to enforce. Treat it as experimental.
-- Each interior face is evaluated twice (once per adjacent cell). A face-based
-  loop would roughly halve Riemann-solver work but needs a conflict-free
-  accumulation scheme.
-- `history` stores every step; large runs should subsample.
-- `euler_equations.py` still carries the experimental `hllc_flux_change` /
-  `roe_flux_change`; they are unused by the solver.
-- The inlet BC overrides *momentum* with the given velocity (not
-  `rho * velocity`); outlet overrides density with `pressure`. Both are
-  placeholders, not physically consistent conditions.
-- The non-orthogonal gradient correction is a heuristic, scaled by
-  `over_relaxation`; `main.py` runs with `1.0`.
+- Wall boundaries use a zero-gradient virtual neighbour in the gradient, i.e.
+  the boundary reconstruction is first-order-like near walls.
+- Inlet/outlet conditions are simple primitive-variable Dirichlet ghost states,
+  not characteristic (non-reflecting) conditions; strong waves can reflect.
+- `history` stores every `save_every`-th step in memory.
 
 ## Testing
 
-`python -m pytest tests`. `tests/test_fvm_core.py` covers neighbour search,
-per-face BC resolution, free-stream preservation (zero residual for uniform
-flow), Roe shear-wave upwinding and BC non-mutation on a small in-memory mesh.
+`python -m pytest tests`. `tests/test_fvm_core.py` uses small in-memory meshes
+and covers: neighbour search and the unique-face table, per-face BC resolution,
+free-stream preservation, global conservation, least-squares exactness on a
+skewed mesh, Roe shear-wave upwinding, inlet/outlet ghost states, area
+centroids and `save_every`. `tests/test_euler_equations.py` checks flux
+consistency and upwinding.

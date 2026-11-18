@@ -30,7 +30,7 @@ def create_numba_bcs(
     # Define the structure (dtype) of our array.
     # We use generic 'param' fields. The meaning of each param depends on the 'bc_type'.
     # For example, for an inlet, param1=vx, param2=vy, param3=vz.
-    # For an outlet, param1=pressure, param2=water_depth.
+    # For an outlet, param1=pressure (Euler), param2=water_depth (shallow water).
     # For a wall, param1=slip (0.0 for False, 1.0 for True).
     bc_dtype = np.dtype(
         [
@@ -55,8 +55,8 @@ def create_numba_bcs(
             velocity = np.asarray(props.get("velocity", [0.0, 0.0]), dtype=np.float64)
             vars_val[: velocity.size] = velocity  # accepts 2D or 3D velocities
         elif bc_type_id == 2:  # outlet
-            vars_val[0] = props.get("pressure", 0.0)
-            # h = props.get("water_depth", 0.0)
+            vars_val[0] = props.get("pressure", 0.0)  # Euler
+            vars_val[1] = props.get("water_depth", 0.0)  # shallow water (<=0: unset)
         elif bc_type_id == 3:  # Wall
             vars_val[0] = 1.0 if props.get("slip", False) else 0.0
 

@@ -48,9 +48,9 @@ def main():
         bc_dict,
         equation,
         t_end=t_end,
-        limiter_type="minmod",  # Options: 'barth_jespersen', 'minmod', 'superbee'
+        limiter_type="barth_jespersen",  # Options: 'barth_jespersen', 'venkatakrishnan'
         flux_type="roe",
-        over_relaxation=1.0,
+        gradient="least_squares",  # or 'green_gauss'
         use_adaptive_dt=True,
         cfl=0.5,
         dt_initial=1e-2,
