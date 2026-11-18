@@ -34,51 +34,62 @@ def flux_code(name: str) -> int:
         raise ValueError(f"Unknown flux '{name}'. Choose from {sorted(FLUX_CODES)}.") from None
 
 
+_BLOCK = 512  # faces per parallel task; scratch buffers are allocated once per block
+
+
 @numba.njit(parallel=True)
 def _face_fluxes(geo, U, gradients, limiters, equation, flux_id, bc_type, bc_value):
     """Numerical flux times face length for every *unique* face (face-parallel).
 
     The flux is evaluated once per face from the owner cell's outward normal;
     the neighbour cell receives its negative in :func:`_gather_residual`.
+    Faces are processed in blocks so that scratch arrays are allocated once per
+    block rather than per face (allocation serialises threads).
     """
     nfaces_u = geo.owner_cell.shape[0]
     nvars = U.shape[1]
     face_flux = np.empty((nfaces_u, nvars))
-    for f in prange(nfaces_u):
-        i = geo.owner_cell[f]
-        j = geo.owner_local[f]
-        nb = geo.neighbors[i, j]
+    nblocks = (nfaces_u + _BLOCK - 1) // _BLOCK
+    for blk in prange(nblocks):
         normal = np.empty(2)
-        normal[0] = geo.normals[i, j, 0]
-        normal[1] = geo.normals[i, j, 1]
-        mx = geo.midpoints[i, j, 0]
-        my = geo.midpoints[i, j, 1]
-
-        # Limited linear reconstruction onto the face from the owner cell.
         U_L = np.empty(nvars)
-        rx = mx - geo.centroids[i, 0]
-        ry = my - geo.centroids[i, 1]
-        for k in range(nvars):
-            dU = gradients[i, k, 0] * rx + gradients[i, k, 1] * ry
-            U_L[k] = U[i, k] + limiters[i, k] * dU
+        U_R = np.empty(nvars)
+        for f in range(blk * _BLOCK, min((blk + 1) * _BLOCK, nfaces_u)):
+            i = geo.owner_cell[f]
+            j = geo.owner_local[f]
+            nb = geo.neighbors[i, j]
+            normal[0] = geo.normals[i, j, 0]
+            normal[1] = geo.normals[i, j, 1]
+            mx = geo.midpoints[i, j, 0]
+            my = geo.midpoints[i, j, 1]
 
-        if nb != -1:
-            U_R = np.empty(nvars)
-            rx = mx - geo.centroids[nb, 0]
-            ry = my - geo.centroids[nb, 1]
+            # Limited linear reconstruction onto the face from the owner cell.
+            rx = mx - geo.centroids[i, 0]
+            ry = my - geo.centroids[i, 1]
             for k in range(nvars):
-                dU = gradients[nb, k, 0] * rx + gradients[nb, k, 1] * ry
-                U_R[k] = U[nb, k] + limiters[nb, k] * dU
-        else:
-            # Ghost state from the boundary condition.
-            U_R = equation.apply_boundary_condition(U_L, normal, bc_type[i, j], bc_value[i, j])
+                dU = gradients[i, k, 0] * rx + gradients[i, k, 1] * ry
+                U_L[k] = U[i, k] + limiters[i, k] * dU
 
-        if flux_id == 0:
-            flux = equation.roe_flux(U_L, U_R, normal)
-        else:
-            flux = equation.hllc_flux(U_L, U_R, normal)
-        for k in range(nvars):
-            face_flux[f, k] = flux[k] * geo.areas[i, j]
+            if nb != -1:
+                rx = mx - geo.centroids[nb, 0]
+                ry = my - geo.centroids[nb, 1]
+                for k in range(nvars):
+                    dU = gradients[nb, k, 0] * rx + gradients[nb, k, 1] * ry
+                    U_R[k] = U[nb, k] + limiters[nb, k] * dU
+            else:
+                # Ghost state from the boundary condition (copied: it may alias U_L).
+                U_R[:] = equation.apply_boundary_condition(
+                    U_L, normal, bc_type[i, j], bc_value[i, j]
+                )
+
+            out = face_flux[f]
+            if flux_id == 0:
+                equation.roe_flux_into(U_L, U_R, normal, out)
+            else:
+                equation.hllc_flux_into(U_L, U_R, normal, out)
+            area = geo.areas[i, j]
+            for k in range(nvars):
+                out[k] *= area
     return face_flux
 
 

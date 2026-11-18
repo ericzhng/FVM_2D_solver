@@ -334,3 +334,11 @@ class ShallowWaterEquations:
         roe_flux = 0.5 * (FL + FR - dissipation)
 
         return roe_flux
+
+    def roe_flux_into(self, U_L, U_R, normal, out):
+        """Interface adapter: write the Roe flux into ``out`` (not allocation-free)."""
+        out[:] = self.roe_flux(U_L, U_R, normal)
+
+    def hllc_flux_into(self, U_L, U_R, normal, out):
+        """Interface adapter: write the HLLC flux into ``out`` (not allocation-free)."""
+        out[:] = self.hllc_flux(U_L, U_R, normal)

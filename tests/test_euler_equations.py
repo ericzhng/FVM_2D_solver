@@ -8,8 +8,10 @@ os.environ["NUMBA_DISABLE_JIT"] = "1"
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.dirname(__file__))
 
 from src.euler_equations import EulerEquations
+from reference_fluxes import ReferenceEuler
 
 
 class TestEulerEquations(unittest.TestCase):
@@ -53,6 +55,32 @@ class TestEulerEquations(unittest.TestCase):
         roe = self.euler_equation.roe_flux(self.q_left, self.q_right, self.normal)
         hllc = self.euler_equation.hllc_flux(self.q_left, self.q_right, self.normal)
         np.testing.assert_allclose(roe, hllc, atol=0.15)
+
+
+    def test_scalar_fluxes_match_reference_implementation(self):
+        """The allocation-free kernels agree with the plain array formulation."""
+        ref = ReferenceEuler(self.gamma)
+        rng = np.random.default_rng(3)
+
+        def state():
+            r = rng.uniform(0.1, 3.0)
+            u, v = rng.normal(0.0, 1.5, 2)
+            p = rng.uniform(0.05, 3.0)
+            return np.array(
+                [r, r * u, r * v, p / (self.gamma - 1) + 0.5 * r * (u * u + v * v)]
+            )
+
+        for _ in range(500):
+            UL, UR = state(), state()
+            th = rng.uniform(0.0, 2.0 * np.pi)
+            n = np.array([np.cos(th), np.sin(th)])
+            for name in ("roe_flux", "hllc_flux"):
+                np.testing.assert_allclose(
+                    getattr(self.euler_equation, name)(UL, UR, n),
+                    getattr(ref, name)(UL, UR, n),
+                    atol=1e-11,
+                    err_msg=name,
+                )
 
 
 if __name__ == "__main__":
