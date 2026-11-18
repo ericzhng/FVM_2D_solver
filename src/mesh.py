@@ -1,8 +1,35 @@
-import gmsh
+from typing import NamedTuple
+
 import numpy as np
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+
+
+class FVMGeometry(NamedTuple):
+    """Contiguous 2D arrays the numba kernels need (all indexed ``[cell, face]``).
+
+    Attributes:
+        neighbors: Neighbour cell index, ``-1`` on boundary faces.
+        normals: Outward unit normals, ``(nelem, nfaces, 2)``.
+        areas: Face lengths.
+        midpoints: Face midpoints, ``(nelem, nfaces, 2)``.
+        face_r: ``midpoint - cell centroid``, ``(nelem, nfaces, 2)``.
+        centroids: Cell centroids, ``(nelem, 2)``.
+        volumes: Cell areas.
+        weights: Linear interpolation weight of the *own* cell at the face.
+        nonorth: Scalar non-orthogonal gradient-correction coefficient.
+    """
+
+    neighbors: np.ndarray
+    normals: np.ndarray
+    areas: np.ndarray
+    midpoints: np.ndarray
+    face_r: np.ndarray
+    centroids: np.ndarray
+    volumes: np.ndarray
+    weights: np.ndarray
+    nonorth: np.ndarray
 
 
 class Mesh:
@@ -45,9 +72,17 @@ class Mesh:
         Args:
             mesh_file (str): Path to the mesh file (e.g., .msh).
         """
-        gmsh.initialize()
-        gmsh.open(mesh_file)
+        import gmsh  # lazy: geometry code stays usable without gmsh installed
 
+        gmsh.initialize()
+        try:
+            gmsh.open(mesh_file)
+            self._extract_from_gmsh(gmsh)
+        finally:
+            gmsh.finalize()
+
+    def _extract_from_gmsh(self, gmsh):
+        """Pull nodes, main-dimension elements and boundary groups from gmsh."""
         self.node_tags, self.node_coords, _ = gmsh.model.mesh.getNodes()
         self.node_coords = np.array(self.node_coords).reshape(-1, 3)
         self.nnode = len(self.node_tags)
@@ -75,20 +110,14 @@ class Mesh:
             )
             self.nelem = len(self.elem_tags)
 
-        # np.save("tests/elem_conn.npy", self.elem_conn)
-        # np.save("tests/node_coords.npy", self.node_coords)
-        # np.save("tests/node_tags.npy", self.node_tags)
-        # np.save("tests/elem_tags.npy", self.elem_tags)
-
-        self._get_boundary_info()
-        gmsh.finalize()
+        self._get_boundary_info(gmsh)
 
     def analyze_mesh(self):
         """
         Analyzes the mesh to compute all geometric and connectivity properties
         required for a Finite Volume Method solver.
         """
-        if self.node_tags is None:
+        if self.nelem == 0:
             raise RuntimeError("Mesh data has not been read. Call read_mesh() first.")
 
         # Create a mapping from node tags to their 0-based index.
@@ -99,8 +128,10 @@ class Mesh:
         self._compute_cell_centroids()
         self._compute_mesh_properties()
         self._compute_cell_volumes()
+        if self.dim >= 2:
+            self._compute_reconstruction_geometry()
 
-    def _get_boundary_info(self):
+    def _get_boundary_info(self, gmsh):
         """
         Extracts boundary faces and their corresponding physical group tags.
         """
@@ -230,22 +261,7 @@ class Mesh:
         all_faces_nodes = self.elem_conn[:, face_nodes_def_arr]
         self.elem_faces = all_faces_nodes
 
-        # Build face-to-element mapping
-        face_to_elems = {}
-        for i in range(self.nelem):
-            for j in range(faces_per_elem):
-                # Sort the face nodes to create a canonical key for the dictionary
-                # This ensures that faces with the same nodes but different orderings
-                # are treated as the same face.
-                sorted_face_nodes = tuple(np.sort(all_faces_nodes[i, j]))
-                face_to_elems.setdefault(sorted_face_nodes, []).append(i)
-
-        # Compute cell neighbors (loop is clearer here)
-        for i in range(self.nelem):
-            for j, face_nodes in enumerate(self.elem_faces[i]):
-                elems = face_to_elems[tuple(np.sort(face_nodes))]
-                if len(elems) > 1:
-                    self.cell_neighbors[i, j] = elems[0] if elems[1] == i else elems[1]
+        self.cell_neighbors = self._find_cell_neighbors(all_faces_nodes)
 
         # Vectorized computation of face midpoints and distances
         face_node_indices = self.node_tag_map[self.elem_faces]
@@ -336,6 +352,83 @@ class Mesh:
 
                         self.face_normals[i, j] = normal
                         self.face_tangentials[i, j] = tangent
+
+    @staticmethod
+    def _find_cell_neighbors(elem_faces):
+        """Match identical faces between cells (vectorized).
+
+        Args:
+            elem_faces: Node tags per face, shape ``(nelem, nfaces, nodes_per_face)``.
+
+        Returns:
+            ``(nelem, nfaces)`` array of neighbour cell indices, ``-1`` where the
+            face is on the boundary.
+
+        Raises:
+            ValueError: If a face is shared by more than two cells.
+        """
+        nelem, nfaces, nper = elem_faces.shape
+        keys = np.sort(elem_faces.reshape(-1, nper), axis=1)
+        _, face_id, counts = np.unique(
+            keys, axis=0, return_inverse=True, return_counts=True
+        )
+        if counts.max() > 2:
+            raise ValueError("Non-manifold mesh: a face is shared by more than 2 cells.")
+        face_id = face_id.reshape(-1)
+        order = np.argsort(face_id, kind="stable")
+        sorted_id = face_id[order]
+        paired = sorted_id[1:] == sorted_id[:-1]
+        first, second = order[:-1][paired], order[1:][paired]
+        neighbors = np.full(nelem * nfaces, -1, dtype=int)
+        neighbors[first] = second // nfaces
+        neighbors[second] = first // nfaces
+        return neighbors.reshape(nelem, nfaces)
+
+    def _compute_reconstruction_geometry(self):
+        """Precompute the static coefficients used by the gradient kernel.
+
+        Sets ``face_weights`` (own-cell interpolation weight) and
+        ``face_nonorth`` (scalar non-orthogonal correction coefficient).
+        """
+        d_i, d_j = self.face_to_cell_distances[..., 0], self.face_to_cell_distances[..., 1]
+        total = d_i + d_j
+        self.face_weights = np.where(
+            total > 1e-9, d_j / np.where(total > 1e-9, total, 1.0), 0.5
+        )
+
+        has_nb = self.cell_neighbors != -1
+        nb = np.maximum(self.cell_neighbors, 0)
+        d = self.cell_centroids[nb] - self.cell_centroids[:, None, :]
+        d_norm = np.linalg.norm(d, axis=2)
+        n_norm = np.linalg.norm(self.face_normals, axis=2)
+        safe_d = np.where(d_norm > 1e-9, d_norm, 1.0)
+        safe_n = np.where(n_norm > 1e-9, n_norm, 1.0)
+        e = d / safe_d[..., None]
+        k = self.face_normals / safe_n[..., None]
+        d_dot_k = np.einsum("ijk,ijk->ij", d, k)
+        e_dot_k = np.einsum("ijk,ijk->ij", e, k)
+        valid = has_nb & (d_norm > 1e-9) & (np.abs(d_dot_k) > 1e-9)
+        # (e - k (e.k)) . d / (d.k)  ==  (|d| - (e.k)(k.d)) / (d.k)
+        safe_dk = np.where(valid, d_dot_k, 1.0)
+        self.face_nonorth = np.where(valid, (d_norm - e_dot_k * d_dot_k) / safe_dk, 0.0)
+
+    def fvm_geometry(self):
+        """Bundle the 2D arrays the numba kernels use (see :class:`FVMGeometry`)."""
+        if self.dim != 2:
+            raise NotImplementedError("The FVM kernels currently support 2D meshes.")
+        mid = np.ascontiguousarray(self.face_midpoints[..., :2])
+        cen = np.ascontiguousarray(self.cell_centroids[:, :2])
+        return FVMGeometry(
+            neighbors=np.ascontiguousarray(self.cell_neighbors),
+            normals=np.ascontiguousarray(self.face_normals[..., :2]),
+            areas=np.ascontiguousarray(self.face_areas),
+            midpoints=mid,
+            face_r=mid - cen[:, None, :],
+            centroids=cen,
+            volumes=np.ascontiguousarray(self.cell_volumes),
+            weights=np.ascontiguousarray(self.face_weights),
+            nonorth=np.ascontiguousarray(self.face_nonorth),
+        )
 
     def get_mesh_quality(self, metric="aspect_ratio"):
         """

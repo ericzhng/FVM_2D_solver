@@ -100,7 +100,7 @@ class EulerEquations:
         """
         rho, u, v, p = self._cons_to_prim(U)
         # Speed of sound 'a'
-        a = np.sqrt(self.gamma * p / rho)
+        a = np.sqrt(self.gamma * max(p, 1e-9) / rho)
         # Max eigenvalue = |v| + a
         return np.sqrt(u**2 + v**2) + a
 
@@ -143,13 +143,16 @@ class EulerEquations:
         # "outlet": 2
         # "wall": 3
         # "transmissive": 4
+        # Never mutate U_inside: the caller still uses it as the left state.
         if bc_type == 1:
-            U_inside[1] = bc_value[0]
-            U_inside[2] = bc_value[1]
-            return U_inside
+            U_ghost = U_inside.copy()
+            U_ghost[1] = bc_value[0]
+            U_ghost[2] = bc_value[1]
+            return U_ghost
         elif bc_type == 2:
-            U_inside[0] = bc_value[0]
-            return U_inside
+            U_ghost = U_inside.copy()
+            U_ghost[0] = bc_value[0]
+            return U_ghost
         elif bc_type == 3:
             return self._apply_wall_bc(U_inside, normal)
         elif bc_type == 4:
@@ -179,14 +182,14 @@ class EulerEquations:
         rL, uL, vL, pL = self._cons_to_prim(U_L)
         vnL = uL * nx + vL * ny  # Normal velocity
         vtL = uL * tx + vL * ty  # Tangential velocity
-        aL = np.sqrt(self.gamma * pL / rL)  # Speed of sound
+        aL = np.sqrt(self.gamma * max(pL, 1e-9) / rL)  # Speed of sound
         FL = self._compute_flux(U_L, normal)
 
         # --- Right State ---
         rR, uR, vR, pR = self._cons_to_prim(U_R)
         vnR = uR * nx + vR * ny  # Normal velocity
         vtR = uR * tx + vR * ty  # Tangential velocity
-        aR = np.sqrt(self.gamma * pR / rR)  # Speed of sound
+        aR = np.sqrt(self.gamma * max(pR, 1e-9) / rR)  # Speed of sound
         FR = self._compute_flux(U_R, normal)
 
         # --- Wave Speed Estimates (Roe Averages) ---
@@ -201,7 +204,9 @@ class EulerEquations:
         hL = (U_L[3] + pL) / rL  # Total enthalpy left
         hR = (U_R[3] + pR) / rR  # Total enthalpy right
         h_roe = (np.sqrt(rL) * hL + np.sqrt(rR) * hR) / (np.sqrt(rL) + np.sqrt(rR))
-        a_roe = np.sqrt((self.gamma - 1) * (h_roe - 0.5 * (u_roe**2 + v_roe**2)))
+        a_roe = np.sqrt(
+            max((self.gamma - 1) * (h_roe - 0.5 * (u_roe**2 + v_roe**2)), 1e-9)
+        )
 
         # --- Davis-Einfeldt Wave Speed Estimates ---
         SL = min(vnL - aL, vn_roe - a_roe)
@@ -328,9 +333,9 @@ class EulerEquations:
         Rv = np.array(
             [
                 [1.0, 0.0, 1.0, 1.0],
-                [u - a * nx, -a * ny, u, u + a * nx],
-                [v - a * ny, a * nx, v, v + a * ny],
-                [H - vn * a, -(u * ny - v * nx) * a, 0.5 * (u**2 + v**2), H + vn * a],
+                [u - a * nx, -ny, u, u + a * nx],
+                [v - a * ny, nx, v, v + a * ny],
+                [H - vn * a, -(u * ny - v * nx), 0.5 * (u**2 + v**2), H + vn * a],
             ]
         )
 

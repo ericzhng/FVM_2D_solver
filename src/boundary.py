@@ -52,8 +52,8 @@ def create_numba_bcs(
 
         # Populate params based on BC type
         if bc_type_id == 1:  # inlet
-            velocity = props.get("velocity", [0.0, 0.0, 0.0])
-            vars_val = np.array(velocity, dtype=np.float64)
+            velocity = np.asarray(props.get("velocity", [0.0, 0.0]), dtype=np.float64)
+            vars_val[: velocity.size] = velocity  # accepts 2D or 3D velocities
         elif bc_type_id == 2:  # outlet
             vars_val[0] = props.get("pressure", 0.0)
             # h = props.get("water_depth", 0.0)
@@ -64,3 +64,43 @@ def create_numba_bcs(
         bc_list.append((tag_id, bc_type_id, vars_val))
 
     return np.array(bc_list, dtype=bc_dtype)
+
+
+def build_face_bcs(mesh, bcs_array):
+    """Resolve the boundary condition of every cell face once, before time stepping.
+
+    Replaces the per-face linear searches the flux kernel used to perform on every
+    residual evaluation. Boundary faces whose physical group has no entry in
+    ``bcs_array`` (or no group at all) default to a wall.
+
+    Args:
+        mesh: Analysed :class:`src.mesh.Mesh`.
+        bcs_array: Output of :func:`create_numba_bcs`.
+
+    Returns:
+        ``(bc_type, bc_value)`` with shapes ``(nelem, nfaces)`` (int32, ``0`` on
+        interior faces) and ``(nelem, nfaces, 3)`` (float64).
+    """
+    nelem, nfaces = mesh.cell_neighbors.shape
+    bc_type = np.zeros((nelem, nfaces), dtype=np.int32)
+    bc_value = np.zeros((nelem, nfaces, 3), dtype=np.float64)
+
+    # Boundary faces are stored with sorted node tags; use the same key.
+    face_tag = {
+        tuple(nodes): tag
+        for nodes, tag in zip(
+            mesh.boundary_faces_nodes.tolist(), mesh.boundary_faces_tags.tolist()
+        )
+    }
+    bc_by_tag = {int(row["tag_id"]): row for row in bcs_array}
+
+    ii, jj = np.nonzero(mesh.cell_neighbors == -1)
+    sorted_faces = np.sort(mesh.elem_faces[ii, jj], axis=1).tolist()
+    for i, j, key in zip(ii, jj, sorted_faces):
+        row = bc_by_tag.get(face_tag.get(tuple(key)))
+        if row is None:
+            bc_type[i, j] = BC_TYPE_MAP["wall"]
+        else:
+            bc_type[i, j] = row["bc_type"]
+            bc_value[i, j] = row["vars"]
+    return bc_type, bc_value

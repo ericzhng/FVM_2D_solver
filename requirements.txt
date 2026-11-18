@@ -3,4 +3,3 @@ scipy>=1.13
 gmsh>=4.13
 matplotlib>=3.9
 numba>=0.60
-line_profiler>=4.1
