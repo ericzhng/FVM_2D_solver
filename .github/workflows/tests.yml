@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check --select E9,F63,F7,F82 # blocking: syntax errors / undefined names
+      - name: Full style check (advisory)
+        uses: astral-sh/ruff-action@v3
+        continue-on-error: true # existing code has style findings; remove once cleaned up
+        with:
+          args: check
+
+  pytest:
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      MPLBACKEND: Agg # no display on the runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      # gmsh wheel links libGLU at import time; nothing else is needed headless
+      - name: System libraries for gmsh
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libglu1-mesa
+
+      - run: python -m pip install -r requirements.txt pytest
+
+      - run: python -m pytest tests -v

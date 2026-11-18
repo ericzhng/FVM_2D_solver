@@ -1,9 +1,6 @@
-numpy==2.2.6
-scipy==1.16.0
-gmsh==4.14.0
-matplotlib==3.10.3
-jupyterlab
-pytest>=8.3.5
-numba==0.61.2
-line_profiler
-memory_profiler
+numpy>=2.0
+scipy>=1.13
+gmsh>=4.13
+matplotlib>=3.9
+numba>=0.60
+line_profiler>=4.1
