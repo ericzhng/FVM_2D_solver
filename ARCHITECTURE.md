@@ -109,8 +109,10 @@ With many ranks per node use one numba thread per rank
 returns assembled global states on rank 0 only.
 
 `python utility/bench_scaling.py --n 400 --steps 40 [--check]` reports ms/step
-and (with `--check`) the difference to a serial solve; run it under `mpiexec`
-with increasing `-n` for a strong-scaling table.
+(from `solve(..., timings=)`, so setup is excluded) and, with `--check`, the
+difference to a serial solve; run it under `mpiexec` with increasing `-n` for a
+strong-scaling table. `solve` gathers the global state every `save_every` steps
+-- leave it large when benchmarking, or you measure pickling the whole field.
 
 Measured single-node numbers (this machine, 16 logical cores, 80k cells):
 
@@ -159,11 +161,13 @@ helps: each rank's working set is small and cache-resident.
   the partitioner is geometric (RCB), not graph-based (METIS); communication is
   not overlapped with computation; the shallow-water fluxes are not yet
   allocation-free.
-- The distributed logic is verified with thread-simulated ranks
-  (`tests/thread_comm.py`), including with compiled numba kernels. The real
-  `mpi4py` wrapper (`MPIComm`) is a thin layer over the same interface but has
-  not been exercised in CI; run `bench_scaling.py --check` under `mpiexec` to
-  confirm on your cluster.
+- The distributed logic is verified two ways: thread-simulated ranks
+  (`tests/thread_comm.py`, runs everywhere, also with compiled numba kernels)
+  and real MPI (`tests/mpi_parity.py`, run by `tests/test_mpi_real.py` when
+  `mpi4py` + `mpiexec` exist, skipped otherwise). On Microsoft MPI 10.1 +
+  mpi4py 4.1 the distributed result equals the serial one **exactly** (max
+  difference 0.0) on 2, 3, 4 and 6 ranks, for Roe/HLLC, RK2/Euler, adaptive
+  CFL (allreduce) and gathered states.
 
 ## Testing
 

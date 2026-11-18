@@ -37,7 +37,9 @@ def initial_state(mesh, gamma=1.4):
     return np.stack([rho, rho * u, rho * v, E], axis=1)
 
 
-def run(mesh, U0, comm, steps, flux, limiter, dt, quiet=True):
+def run(mesh, U0, comm, steps, flux, limiter, dt, quiet=True, timings=None):
+    # Gather the global state only at the end: per-step gathers would measure
+    # pickling/communication of the whole field, not the solver.
     bc = {k: {"type": "transmissive"} for k in mesh.boundary_tag_map}
     sink = io.StringIO() if quiet else sys.stdout
     with contextlib.redirect_stdout(sink):
@@ -52,6 +54,8 @@ def run(mesh, U0, comm, steps, flux, limiter, dt, quiet=True):
             use_adaptive_dt=False,
             dt_initial=dt,
             comm=comm,
+            save_every=steps,
+            timings=timings,
         )
 
 
@@ -70,25 +74,28 @@ def main():
     U0 = initial_state(mesh)
 
     run(mesh, U0, comm, 2, args.flux, args.limiter, args.dt)  # warm-up / compile
-    comm.allreduce_min(0.0)  # cheap barrier
-    t0 = time.perf_counter()
-    hist, _ = run(mesh, U0, comm, args.steps, args.flux, args.limiter, args.dt)
-    comm.allreduce_min(0.0)
-    elapsed = time.perf_counter() - t0
 
-    if comm.rank == 0:
+    # solve() reports its own setup and time-loop durations; the slowest rank
+    # defines the wall time (ranks synchronise in every halo exchange).
+    tm: dict = {}
+    hist, _ = run(mesh, U0, comm, args.steps, args.flux, args.limiter, args.dt, timings=tm)
+    loop = comm.gather(tm["loop"])
+    setup = comm.gather(tm["setup"])
+    if comm.rank == 0 and loop is not None and setup is not None:
+        per_step = max(loop) / tm["steps"]
         threads = os.environ.get("NUMBA_NUM_THREADS", "all")
         print(
-            f"cells={mesh.nelem} ranks={comm.size} numba_threads={threads} "
-            f"steps={args.steps}: {elapsed:.3f} s total, "
-            f"{1e3 * elapsed / args.steps:.2f} ms/step "
-            f"({mesh.nelem * args.steps / elapsed / 1e6:.2f} M cell-steps/s)"
+            f"cells={mesh.nelem} ranks={comm.size} numba_threads={threads}: "
+            f"{1e3 * per_step:.2f} ms/step "
+            f"({mesh.nelem / per_step / 1e6:.2f} M cell-steps/s), "
+            f"setup {max(setup):.2f} s"
         )
+    steps_done = args.steps
 
     if args.check:
         from src.parallel import SerialComm
 
-        ref, _ = run(mesh, U0, SerialComm(), args.steps, args.flux, args.limiter, args.dt)
+        ref, _ = run(mesh, U0, SerialComm(), steps_done, args.flux, args.limiter, args.dt)
         if comm.rank == 0:
             err = np.abs(hist[-1] - ref[-1]).max()
             print(f"max |parallel - serial| = {err:.3e}")

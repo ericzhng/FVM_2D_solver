@@ -28,6 +28,7 @@ def solve(
     time_integration="rk2",
     save_every=1,
     comm=None,
+    timings=None,
 ):
     """Advance ``U`` to ``t_end`` with a second-order MUSCL finite-volume scheme.
 
@@ -48,6 +49,8 @@ def solve(
         time_integration: Key of ``time_step.INTEGRATORS`` (``"rk2"`` / ``"euler"``).
         save_every: Store the state every ``save_every`` steps (the final state is
             always stored) to bound memory on long runs.
+        timings: Optional dict; if given it receives ``setup`` (seconds spent
+            before the time loop), ``loop`` (seconds in the loop) and ``steps``.
         comm: Communicator from :mod:`src.parallel` (``None`` = serial). Every rank
             must call ``solve`` with the same global ``mesh``/``U``/arguments; each
             then advances its own subdomain (see :mod:`src.partition`).
@@ -66,6 +69,7 @@ def solve(
 
     comm = SerialComm() if comm is None else comm
     root = comm.rank == 0
+    t_setup = time.perf_counter()
 
     # Everything static is resolved once, outside the time loop.
     bc_type_g, bc_value_g = build_face_bcs(mesh, create_numba_bcs(bc_dict, mesh.boundary_tag_map))
@@ -100,6 +104,7 @@ def solve(
     t, n, dt = 0.0, 0, dt_initial
     t_saved = 0.0
 
+    t_loop = time.perf_counter()
     while t_end - t > 1e-12 * t_end:
         start = time.perf_counter()
         if use_adaptive_dt:
@@ -123,4 +128,6 @@ def solve(
                 f"Loop Time: {time.perf_counter() - start:.4f}s"
             )
 
+    if timings is not None:
+        timings.update(setup=t_loop - t_setup, loop=time.perf_counter() - t_loop, steps=n)
     return history, dt_history
