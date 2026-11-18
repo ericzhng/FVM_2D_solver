@@ -2,7 +2,7 @@
 
 import numba
 import numpy as np
-from numba import prange
+from src.numba_compat import prange
 
 
 @numba.njit(parallel=True)

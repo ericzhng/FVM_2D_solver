@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from src.mesh import FVMGeometry
+from src.parallel import Communicator, SerialComm
 
 _TRANSMISSIVE = 4
 
@@ -79,7 +80,7 @@ class Domain:
     ghost_idx: np.ndarray
     send: dict = field(default_factory=dict)
     recv: dict = field(default_factory=dict)
-    comm: object = None
+    comm: Communicator = field(default_factory=SerialComm)
 
     @property
     def all_owned(self) -> bool:

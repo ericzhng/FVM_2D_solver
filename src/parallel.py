@@ -12,7 +12,24 @@ The solver only needs four operations, so any object providing them works:
 lazily, so the package works without MPI installed).
 """
 
+from typing import Any, Protocol
+
 import numpy as np
+
+
+class Communicator(Protocol):
+    """Interface the solver needs from a communicator (see module docstring)."""
+
+    rank: int
+    size: int
+
+    def allreduce_min(self, x: float) -> float: ...
+
+    def alltoall(self, objs: Any) -> list[Any]: ...
+
+    def exchange(self, U: np.ndarray, send: dict, recv: dict) -> None: ...
+
+    def gather(self, obj: Any) -> list[Any] | None: ...
 
 
 class SerialComm:

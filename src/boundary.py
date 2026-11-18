@@ -88,16 +88,15 @@ def build_face_bcs(mesh, bcs_array):
     # Boundary faces are stored with sorted node tags; use the same key.
     face_tag = {
         tuple(nodes): tag
-        for nodes, tag in zip(
-            mesh.boundary_faces_nodes.tolist(), mesh.boundary_faces_tags.tolist()
-        )
+        for nodes, tag in zip(mesh.boundary_faces_nodes.tolist(), mesh.boundary_faces_tags.tolist())
     }
     bc_by_tag = {int(row["tag_id"]): row for row in bcs_array}
 
     ii, jj = np.nonzero(mesh.cell_neighbors == -1)
     sorted_faces = np.sort(mesh.elem_faces[ii, jj], axis=1).tolist()
     for i, j, key in zip(ii, jj, sorted_faces):
-        row = bc_by_tag.get(face_tag.get(tuple(key)))
+        tag = face_tag.get(tuple(key))
+        row = None if tag is None else bc_by_tag.get(tag)
         if row is None:
             bc_type[i, j] = BC_TYPE_MAP["wall"]
         else:

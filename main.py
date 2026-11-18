@@ -1,3 +1,5 @@
+from typing import Any
+
 from src.mesh import Mesh, plot_mesh  # noqa: F401
 from src.parallel import get_comm
 from src.solver import solve
@@ -38,10 +40,12 @@ def main():
         print("Setting up the simulation case...")
     equation_type = "euler"  # Choose 'shallow_water' or 'euler'
 
+    equation: Any  # EulerEquations or ShallowWaterEquations (numba jitclasses)
+    t_end: float
     if equation_type == "shallow_water":
         U_init, bc_dict = setup_case_shallow_water(mesh)
         equation = ShallowWaterEquations(g=9.81)
-        t_end = 20
+        t_end = 20.0
     elif equation_type == "euler":
         U_init, bc_dict = setup_case_euler(mesh)
         equation = EulerEquations(gamma=1.4)

@@ -6,7 +6,7 @@ All kernels are cell-parallel numba loops that read the static geometry from a
 
 import numba
 import numpy as np
-from numba import prange
+from src.numba_compat import prange
 
 from src.limiters import apply_limiter
 

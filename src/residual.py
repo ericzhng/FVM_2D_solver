@@ -8,7 +8,7 @@ explicit update is ``U - dt * R``.
 
 import numba
 import numpy as np
-from numba import prange
+from src.numba_compat import prange
 
 from src.limiters import limiter_code
 from src.mesh import FVMGeometry
