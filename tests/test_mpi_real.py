@@ -18,6 +18,7 @@ if MPIEXEC is None and os.name == "nt":
 @pytest.mark.skipif(MPIEXEC is None, reason="mpiexec not found")
 @pytest.mark.parametrize("ranks", [2, 3])
 def test_real_mpi_matches_serial(ranks):
+    assert MPIEXEC is not None  # guaranteed by skipif
     script = os.path.join(os.path.dirname(__file__), "mpi_parity.py")
     env = dict(os.environ, NUMBA_NUM_THREADS="1")
     proc = subprocess.run(
