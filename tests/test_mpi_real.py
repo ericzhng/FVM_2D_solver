@@ -1,7 +1,7 @@
 r"""Module: tests.test_mpi_real
 
-Description: pytest wrapper that runs ``tests/mpi_parity.py`` under mpiexec with 2 and 3 ranks.
-    The test is skipped when mpi4py or mpiexec is not available.
+Description: pytest wrapper that runs ``utility/mpi_parity_check.py`` under mpiexec with 2 and 3
+    ranks. The test is skipped when mpi4py or mpiexec is not available.
 
 Author: Hui Zhang
 Date: 2026-11-18
@@ -27,7 +27,7 @@ if MPIEXEC is None and os.name == "nt":
 @pytest.mark.parametrize("ranks", [2, 3])
 def test_real_mpi_matches_serial(ranks):
     assert MPIEXEC is not None  # guaranteed by skipif
-    script = os.path.join(os.path.dirname(__file__), "mpi_parity.py")
+    script = os.path.join(os.path.dirname(__file__), "..", "utility", "mpi_parity_check.py")
     env = dict(os.environ, NUMBA_NUM_THREADS="1")
     proc = subprocess.run(
         [MPIEXEC, "-n", str(ranks), sys.executable, script],

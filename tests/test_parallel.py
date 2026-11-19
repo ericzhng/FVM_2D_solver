@@ -2,8 +2,9 @@ r"""Module: tests.test_parallel
 
 Description: Decomposition and distributed-solver tests with thread-simulated ranks. They cover
     balanced RCB partitions, every cell owned exactly once, symmetric halo plans, and
-    distributed results equal to serial for 2 to 4 ranks. JIT is disabled at import (see
-    ``tests/thread_comm.py``).
+    distributed results equal to serial for 2 to 4 ranks. Ranks are threads sharing a barrier
+    (``ThreadComm``), so no MPI runtime is needed. JIT is disabled at import because numba's
+    default threading layer is not safe for concurrent parallel regions from several threads.
 
 Author: Hui Zhang
 Date: 2026-11-18
@@ -12,8 +13,9 @@ Copyright: (c) 2026 Hui Zhang. All rights reserved.
 
 import os
 import sys
+import threading
 
-os.environ["NUMBA_DISABLE_JIT"] = "1"  # see thread_comm.py
+os.environ["NUMBA_DISABLE_JIT"] = "1"  # see the ThreadComm note below
 
 import numpy as np
 import pytest
@@ -22,12 +24,88 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.dirname(__file__))
 
 from test_fvm_core import cons, make_grid_mesh  # noqa: E402
-from thread_comm import run_ranks  # noqa: E402
 
 from src.boundary import build_face_bcs, create_numba_bcs  # noqa: E402
 from src.euler_equations import EulerEquations  # noqa: E402
 from src.partition import build_domain, partition_rcb  # noqa: E402
 from src.solver import solve  # noqa: E402
+
+# --- In-process stand-in for MPI: ranks are threads sharing a barrier ---------
+# Implements the communicator interface of src.parallel so decomposition, halo
+# exchange and the distributed solver run without an MPI runtime.
+
+
+class _Shared:
+    def __init__(self, size):
+        self.size = size
+        self.barrier = threading.Barrier(size)
+        self.slots = [None] * size
+        self.mail = {}
+
+
+class ThreadComm:
+    def __init__(self, shared, rank):
+        self._s = shared
+        self.rank = rank
+        self.size = shared.size
+
+    def allreduce_min(self, x):
+        s = self._s
+        s.slots[self.rank] = x
+        s.barrier.wait()
+        out = min(s.slots)
+        s.barrier.wait()
+        return out
+
+    def alltoall(self, objs):
+        s = self._s
+        for q, o in enumerate(objs):
+            s.mail[(self.rank, q)] = o
+        s.barrier.wait()
+        out = [s.mail[(q, self.rank)] for q in range(self.size)]
+        s.barrier.wait()
+        return out
+
+    def gather(self, obj):
+        s = self._s
+        s.slots[self.rank] = obj
+        s.barrier.wait()
+        out = list(s.slots) if self.rank == 0 else None
+        s.barrier.wait()
+        return out
+
+    def exchange(self, U, send, recv):
+        s = self._s
+        for q, idx in send.items():
+            s.mail[("halo", self.rank, q)] = U[idx].copy()
+        s.barrier.wait()
+        for q, idx in recv.items():
+            U[idx] = s.mail[("halo", q, self.rank)]
+        s.barrier.wait()
+
+
+def run_ranks(size, fn):
+    """Run ``fn(comm)`` on ``size`` thread-ranks; return the list of results."""
+    shared = _Shared(size)
+    results = [None] * size
+    errors = []
+
+    def target(rank):
+        try:
+            results[rank] = fn(ThreadComm(shared, rank))
+        except BaseException as exc:  # noqa: BLE001 - re-raised below
+            errors.append(exc)
+            shared.barrier.abort()
+
+    threads = [threading.Thread(target=target, args=(r,)) for r in range(size)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    if errors:
+        raise errors[0]
+    return results
+
 
 BC = {
     "left": {"type": "wall"},

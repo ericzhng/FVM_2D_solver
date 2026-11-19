@@ -187,8 +187,8 @@ helps: each rank's working set is small and cache-resident.
   not overlapped with computation; the shallow-water fluxes are not yet
   allocation-free.
 - The distributed logic is verified two ways: thread-simulated ranks
-  (`tests/thread_comm.py`, runs everywhere, also with compiled numba kernels)
-  and real MPI (`tests/mpi_parity.py`, run by `tests/test_mpi_real.py` when
+  (`ThreadComm` in `tests/test_parallel.py`, runs everywhere, also with compiled numba kernels)
+  and real MPI (`utility/mpi_parity_check.py`, run by `tests/test_mpi_real.py` when
   `mpi4py` + `mpiexec` exist, skipped otherwise). On Microsoft MPI 10.1 +
   mpi4py 4.1 the distributed result equals the serial one **exactly** (max
   difference 0.0) on 2, 3, 4 and 6 ranks, for Roe/HLLC, RK2/Euler, adaptive

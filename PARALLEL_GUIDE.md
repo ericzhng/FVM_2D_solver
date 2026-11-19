@@ -404,8 +404,8 @@ for step in range(nsteps):
 | Halo exchange, gather | `Domain.exchange`, `Domain.gather`; `MPIComm.exchange` (`Isend`/`Irecv`/`Waitall`) |
 | Time loop, global `dt`, residual wrapper | [src/solver.py](src/solver.py): `solve` |
 | Serial numerics (unchanged by MPI) | [src/residual.py](src/residual.py), [src/reconstruction.py](src/reconstruction.py), [src/time_step.py](src/time_step.py) |
-| Fake ranks for tests | [tests/thread_comm.py](tests/thread_comm.py) |
-| Parallel tests | [tests/test_parallel.py](tests/test_parallel.py) (thread ranks), [tests/mpi_parity.py](tests/mpi_parity.py) + [tests/test_mpi_real.py](tests/test_mpi_real.py) (real MPI) |
+| Fake ranks for tests | `ThreadComm` inside [tests/test_parallel.py](tests/test_parallel.py) |
+| Parallel tests | [tests/test_parallel.py](tests/test_parallel.py) (thread ranks), [utility/mpi_parity_check.py](utility/mpi_parity_check.py) + [tests/test_mpi_real.py](tests/test_mpi_real.py) (real MPI) |
 | Scaling benchmark | [utility/bench_scaling.py](utility/bench_scaling.py) |
 | Figures | [utility/make_parallel_figures.py](utility/make_parallel_figures.py) |
 
@@ -450,7 +450,7 @@ What rank 0 **sends** is exactly what rank 1 **receives**, in the same order
 pip install -r requirements-mpi.txt              # mpi4py; needs an MPI runtime (MS-MPI, OpenMPI, ...)
 
 NUMBA_NUM_THREADS=1 mpiexec -n 4 python main.py                 # run the solver
-NUMBA_NUM_THREADS=1 mpiexec -n 4 python tests/mpi_parity.py     # distributed == serial
+NUMBA_NUM_THREADS=1 mpiexec -n 4 python utility/mpi_parity_check.py   # distributed == serial
 NUMBA_NUM_THREADS=1 mpiexec -n 8 python utility/bench_scaling.py --n 300 --steps 40
 python -m pytest tests                                          # fake ranks; real-MPI tests skip if unavailable
 python utility/make_parallel_figures.py                         # regenerate doc/figures
