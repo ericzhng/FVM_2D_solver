@@ -8,7 +8,7 @@ Hot loops are numba-compiled and parallel over cells.
 ## Data flow
 
 ```
- .msh file                                        main.py
+ .msh file                                  examples/*/main.py
     |                                                |
     v                                                v
  mesh.Mesh.read_mesh  (gmsh, lazy import)      case_setup.setup_case_*
@@ -55,11 +55,13 @@ Hot loops are numba-compiled and parallel over cells.
 | `partition.py` | Domain decomposition: RCB partitioner, two-ring halos, local geometry/face tables, halo exchange plan (`Domain`). |
 | `parallel.py` | Communicator interface: `SerialComm`, `MPIComm` (mpi4py, lazy import), `get_comm()`. |
 | `case_setup.py` | Initial conditions and BC dictionaries for the demo cases. |
+| `driver.py` | Command-line driver shared by the examples: `Problem` description, algorithm options, mesh loading (`.msh` or built-in `unit_square:N`), plots. |
 | `visualization.py` | Matplotlib snapshots and animation. |
 
-`main.py` is the script entry point; `utility/` holds standalone tools (gmsh mesh
-generators, benchmarks, checks); `tests/` holds unit tests and `integration_tests/`
-the integration tests (both pytest). See [Testing and tools](#testing-and-tools).
+`examples/<problem>/main.py` are the script entry points (one folder per physical
+problem; the algorithm is chosen on the command line, see `src/driver.py`);
+`utility/` holds standalone tools grouped by purpose; `tests/unit/` and
+`tests/integration/` hold the pytest suites. See [Testing and tools](#testing-and-tools).
 
 ## Conventions
 
@@ -95,7 +97,7 @@ Two levels, which can be combined:
 - **Shared memory (numba threads).** Kernels are `prange` loops over blocks of
   cells/faces; scratch buffers are allocated once per block (allocation
   serialises threads). Control with `NUMBA_NUM_THREADS`.
-- **Distributed memory (MPI).** `mpiexec -n P python main.py` (needs `mpi4py`,
+- **Distributed memory (MPI).** `mpiexec -n P python examples/euler_riemann/main.py` (needs `mpi4py`,
   see `requirements-mpi.txt`). Every rank builds the global mesh, then
   `partition.build_domain` keeps owned cells + two halo rings. A residual
   evaluation does **one** halo exchange of `U` (non-blocking, point-to-point);
@@ -111,7 +113,7 @@ With many ranks per node use one numba thread per rank
 (`NUMBA_NUM_THREADS=1`) to avoid oversubscription. `solve(..., comm=comm)`
 returns assembled global states on rank 0 only.
 
-`python utility/bench_scaling.py --n 400 --steps 40 [--check]` reports ms/step
+`python utility/benchmarks/bench_scaling.py --n 400 --steps 40 [--check]` reports ms/step
 (from `solve(..., timings=)`, so setup is excluded) and, with `--check`, the
 difference to a serial solve; run it under `mpiexec` with increasing `-n` for a
 strong-scaling table. `solve` gathers the global state every `save_every` steps
@@ -127,7 +129,7 @@ Measured single-node numbers (this machine, 16 logical cores, 80k cells):
 
 Measured MPI strong scaling (Microsoft MPI 10.1, mpi4py 4.1, one numba thread
 per rank, 180,000 cells, Roe + RK2, Intel i7-10700K: 8 cores / 16 threads, idle
-machine; `utility/bench_scaling.py --n 300 --steps 40`, two independent runs):
+machine; `utility/benchmarks/bench_scaling.py --n 300 --steps 40`, two independent runs):
 
 | Ranks | Run 1 ms/step | Run 2 ms/step | Speedup (run 1 / run 2) | Efficiency (run 1 / run 2) |
 | --- | --- | --- | --- | --- |
@@ -187,8 +189,8 @@ helps: each rank's working set is small and cache-resident.
   not overlapped with computation; the shallow-water fluxes are not yet
   allocation-free.
 - The distributed logic is verified two ways: thread-simulated ranks
-  (`ThreadComm` in `integration_tests/test_distributed_threads.py`, runs everywhere, also with compiled numba kernels)
-  and real MPI (`utility/mpi_parity_check.py`, run by `integration_tests/test_mpi_real.py` when
+  (`ThreadComm` in `tests/integration/test_distributed_threads.py`, runs everywhere, also with compiled numba kernels)
+  and real MPI (`utility/checks/mpi_parity_check.py`, run by `tests/integration/test_mpi_real.py` when
   `mpi4py` + `mpiexec` exist, skipped otherwise). On Microsoft MPI 10.1 +
   mpi4py 4.1 the distributed result equals the serial one **exactly** (max
   difference 0.0) on 2, 3, 4 and 6 ranks, for Roe/HLLC, RK2/Euler, adaptive
@@ -200,8 +202,15 @@ Tests are split by what they exercise:
 
 | Folder | Contents | Run |
 | --- | --- | --- |
-| `tests/` | **Unit tests**: one function or class in isolation, fast. `test_fvm_core.py` (mesh and face tables, per-face BCs, gradients incl. near walls, limiters, ghost states, centroids), `test_euler_equations.py` (Roe/HLLC flux properties and agreement with a plain reference), `test_partition.py` (RCB partitioner). | `python -m pytest tests` |
-| `integration_tests/` | **Integration and workflow tests**: several modules together or a full run. `test_residual_pipeline.py` (free-stream preservation, global conservation), `test_solver_workflow.py` (serial solve, `save_every`), `test_distributed_threads.py` (domain/halo plans and distributed == serial with thread-simulated ranks), `test_mpi_real.py` (real MPI via `utility/mpi_parity_check.py`; skipped without mpi4py/mpiexec). | `python -m pytest integration_tests` |
-| `utility/` | **Standalone tools**, runnable on their own: gmsh mesh generators, `bench_scaling.py`, `mpi_parity_check.py`, `make_parallel_figures.py`, and the micro-benchmarks `bench_centroids.py`, `bench_node_tags_map.py`, `bench_norm_timing.py`. The first two benchmarks read sample arrays from `data/mesh_arrays/`. | `python utility/<tool>.py` |
+| `tests/unit/` | **Unit tests**: one function or class in isolation, fast. `test_fvm_core.py` (face tables, per-face BCs, gradients incl. near walls, limiters, ghost states, centroids), `test_euler_equations.py` and `test_shallow_water_equations.py` (flux consistency, antisymmetry, upwinding), `test_boundary.py`, `test_limiters.py`, `test_time_step.py` (integrator order, CFL step), `test_mesh_geometry.py` (areas, closed cells, perimeter), `test_case_setup.py`, `test_partition.py` (RCB), `test_parallel.py`, `test_driver.py` (CLI options, mesh selection). | `python -m pytest tests/unit` |
+| `tests/integration/` | **Integration and workflow tests**: several modules together or a full run. `test_residual_pipeline.py` (free-stream preservation, global conservation), `test_solver_workflow.py` (serial solve, `save_every`), `test_distributed_threads.py` (distributed == serial with thread-simulated ranks), `test_mpi_real.py` (real MPI via `utility/checks/mpi_parity_check.py`; skipped without mpi4py/mpiexec), `test_examples.py` (every example end to end with several algorithm choices). | `python -m pytest tests/integration` |
+| `examples/` | One folder per problem (`euler_riemann/`, `shallow_water_riemann/`), each with a `main.py` that picks flux, limiter, gradient, integrator, CFL and mesh from the command line (`--help`). | `python examples/<problem>/main.py [options]` |
+| `utility/mesh_generation/` | gmsh scripts that write `data/*.msh` (run from the repository root). | `python utility/mesh_generation/<tool>.py` |
+| `utility/benchmarks/` | `bench_scaling.py` (strong scaling) and micro-benchmarks `bench_centroids.py`, `bench_node_tags_map.py`, `bench_norm_timing.py` (the first two read `data/mesh_arrays/`). | `python utility/benchmarks/<tool>.py` |
+| `utility/checks/` | `mpi_parity_check.py`: distributed == serial under real MPI. | `mpiexec -n 4 python utility/checks/mpi_parity_check.py` |
+| `utility/figures/` | `make_parallel_figures.py`: regenerates `doc/figures/`. | `python utility/figures/make_parallel_figures.py` |
 
+`python -m pytest` runs everything (JIT is disabled for the whole session in `tests/conftest.py`);
+`-m integration` / `-m "not integration"` also selects a layer. `tests/unit/` needs no gmsh, MPI or
+display. 
 CI runs both test folders as separate steps.
