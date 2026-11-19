@@ -1,8 +1,8 @@
-r"""Module: tests.test_norm_timing
+r"""Module: utility.bench_norm_timing
 
 Description: Micro-benchmark comparing ``np.linalg.norm`` with an explicit square root for a
-    3-vector. It runs and prints at import, so it is a benchmark script rather than a pytest
-    test.
+    3-vector. Run it as a script (``python utility/bench_norm_timing.py``); it prints the
+    timings.
 
 Author: Hui Zhang
 Date: 2025-07-26
@@ -44,5 +44,6 @@ def my_norm():
     return normal2
 
 
-print(np_norm())
-print(my_norm())
+if __name__ == "__main__":
+    print(np_norm())
+    print(my_norm())
