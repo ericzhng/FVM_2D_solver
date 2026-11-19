@@ -1,29 +1,21 @@
-r"""Module: tests.test_euler_equations
+r"""Module: tests.unit.test_euler_equations
 
 Description: Unit tests for the Euler flux kernels. They check flux consistency F(U, U),
     upwinding of supersonic flow, agreement of Roe and HLLC on a jump, and agreement of the
     optimised kernels with a plain array-based reference (``ReferenceEuler``, defined below) on
-    random states. JIT is disabled at import.
+    random states. JIT is disabled by conftest.py.
 
 Author: Hui Zhang
 Date: 2025-07-25
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import os
-import sys
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-# Disable Numba JIT compilation for testing
-os.environ["NUMBA_DISABLE_JIT"] = "1"
-
-# Add the src directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.euler_equations import EulerEquations  # noqa: E402
+from src.euler_equations import EulerEquations
 
 
 class ReferenceEuler:

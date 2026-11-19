@@ -1,4 +1,4 @@
-r"""Module: tests.test_fvm_core
+r"""Module: tests.unit.test_fvm_core
 
 Description: Unit tests for the FVM building blocks on small in-memory meshes. They cover
     neighbour and face tables, per-face boundary data, least-squares and Green-Gauss
@@ -10,20 +10,15 @@ Date: 2026-11-18
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.boundary import build_face_bcs, create_numba_bcs  # noqa: E402
-from src.euler_equations import EulerEquations  # noqa: E402
-from src.limiters import limiter_code  # noqa: E402
-from src.mesh import Mesh  # noqa: E402
-from src.reconstruction import compute_gradients_gaussian, compute_gradients_lsq  # noqa: E402
-from src.shallow_water_equations import ShallowWaterEquations  # noqa: E402
+from src.boundary import build_face_bcs, create_numba_bcs
+from src.euler_equations import EulerEquations
+from src.limiters import limiter_code
+from src.mesh import Mesh
+from src.reconstruction import compute_gradients_gaussian, compute_gradients_lsq
+from src.shallow_water_equations import ShallowWaterEquations
 
 
 def make_grid_mesh(n=4):

@@ -1,4 +1,4 @@
-r"""Module: integration_tests.test_solver_workflow
+r"""Module: tests.integration.test_solver_workflow
 
 Description: End-to-end test of the serial solver loop: with ``save_every`` the stored history keeps
     the total simulated time and the same final state as storing every step.
@@ -8,17 +8,12 @@ Date: 2026-11-18
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.euler_equations import EulerEquations  # noqa: E402
-from src.mesh import Mesh  # noqa: E402
-from src.solver import solve  # noqa: E402
+from src.euler_equations import EulerEquations
+from src.mesh import Mesh
+from src.solver import solve
 
 
 def cons(r, u, v, p, gamma=1.4):

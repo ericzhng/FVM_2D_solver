@@ -1,4 +1,4 @@
-r"""Module: integration_tests.test_residual_pipeline
+r"""Module: tests.integration.test_residual_pipeline
 
 Description: Integration tests of the spatial residual pipeline (gradient, limiter, Riemann flux,
     per-cell gather) on small in-memory meshes: free-stream preservation for every flux and
@@ -9,18 +9,13 @@ Date: 2026-11-18
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.boundary import build_face_bcs, create_numba_bcs  # noqa: E402
-from src.euler_equations import EulerEquations  # noqa: E402
-from src.mesh import Mesh  # noqa: E402
-from src.residual import compute_residual  # noqa: E402
+from src.boundary import build_face_bcs, create_numba_bcs
+from src.euler_equations import EulerEquations
+from src.mesh import Mesh
+from src.residual import compute_residual
 
 
 def cons(r, u, v, p, gamma=1.4):

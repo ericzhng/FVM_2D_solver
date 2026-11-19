@@ -1,9 +1,9 @@
-r"""Module: integration_tests.test_distributed_threads
+r"""Module: tests.integration.test_distributed_threads
 
 Description: Integration tests of the domain decomposition and the distributed solver with
     thread-simulated ranks (``ThreadComm``): every cell is owned exactly once, halo plans
     are symmetric, and distributed results equal the serial run for 2 to 4 ranks. JIT is
-    disabled at import because numba's default threading layer is not safe for concurrent
+    disabled (see conftest.py) because numba's default threading layer is not safe for concurrent
     parallel regions from several Python threads.
 
 Author: Hui Zhang
@@ -11,22 +11,16 @@ Date: 2026-11-18
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import os
-import sys
 import threading
-
-os.environ["NUMBA_DISABLE_JIT"] = "1"  # see the ThreadComm note below
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.boundary import build_face_bcs, create_numba_bcs  # noqa: E402
-from src.euler_equations import EulerEquations  # noqa: E402
-from src.mesh import Mesh  # noqa: E402
-from src.partition import build_domain  # noqa: E402
-from src.solver import solve  # noqa: E402
+from src.boundary import build_face_bcs, create_numba_bcs
+from src.euler_equations import EulerEquations
+from src.mesh import Mesh
+from src.partition import build_domain
+from src.solver import solve
 
 # --- In-process stand-in for MPI: ranks are threads sharing a barrier ---------
 # Implements the communicator interface of src.parallel so decomposition, halo
