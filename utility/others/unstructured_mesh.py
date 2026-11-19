@@ -22,18 +22,19 @@ class UnstructuredMesh:
         self.connectivity = np.array(connectivity)
         self.n_cells = len(connectivity)
         self.n_points = len(points)
-        self.cell_centers = None
-        self.face_centers = None
-        self.cell_volumes = None
-        self.face_areas = None
-        self.face_normals = None
-        self.face_tangents = None
-        self.cell_neighbors = None
-        self.face_neighbors = None
-        self.faces = None
-        self.boundary_faces = None
-        self.boundary_types = None
-        self.ghost_cells = None
+        # Filled in by ``_build_mesh`` below; typed here so users see arrays, not None.
+        self.cell_centers: np.ndarray = np.empty((0, dim))
+        self.face_centers: np.ndarray = np.empty((0, dim))
+        self.cell_volumes: np.ndarray = np.empty(0)
+        self.face_areas: np.ndarray = np.empty(0)
+        self.face_normals: np.ndarray = np.empty((0, dim))
+        self.face_tangents: np.ndarray = np.empty((0, dim))
+        self.cell_neighbors: list[list[tuple[int, int]]] = []
+        self.face_neighbors: list[list[int]] = []
+        self.faces: np.ndarray = np.empty((0, dim), dtype=int)
+        self.boundary_faces: list[int] = []
+        self.boundary_types: dict | None = None  # set by add_ghost_cells
+        self.ghost_cells: np.ndarray | None = None
         self.n_ghost = 0
         self._build_mesh()
 
@@ -45,10 +46,11 @@ class UnstructuredMesh:
         self._compute_face_areas()
         self._compute_normals_tangents()
         self._compute_neighbors()
+        self._compute_boundary_faces()
 
     def _compute_faces(self):
         faces = set()
-        face_to_cells = {}
+        face_to_cells: dict[tuple, list[int]] = {}
         if self.dim == 2:
             for cell_idx, cell in enumerate(self.connectivity):
                 for i in range(len(cell)):
@@ -140,6 +142,12 @@ class UnstructuredMesh:
             if len(cells) == 2:
                 self.cell_neighbors[cells[0]].append((cells[1], i))
                 self.cell_neighbors[cells[1]].append((cells[0], i))
+
+    def _compute_boundary_faces(self):
+        """Boundary faces are those adjacent to exactly one cell."""
+        self.boundary_faces = [
+            i for i, cells in enumerate(self.face_neighbors) if len(cells) == 1
+        ]
 
     def add_ghost_cells(self, boundary_conditions):
         self.boundary_types = boundary_conditions
