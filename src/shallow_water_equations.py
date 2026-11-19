@@ -292,7 +292,7 @@ class ShallowWaterEquations:
         # --- Roe Averages ---
         sqrt_hL = np.sqrt(hL)
         sqrt_hR = np.sqrt(hR)
-        h_avg = sqrt_hL * sqrt_hR
+        h_avg = 0.5 * (hL + hR)  # Roe average of the depth (Roe's property U)
 
         u_avg = (sqrt_hL * uL + sqrt_hR * uR) / (sqrt_hL + sqrt_hR)
         v_avg = (sqrt_hL * vL + sqrt_hR * vR) / (sqrt_hL + sqrt_hR)
