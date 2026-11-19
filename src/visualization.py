@@ -15,7 +15,7 @@ import numpy as np
 from src.mesh import Mesh
 
 
-def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0):
+def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0, filename=None):
     """
     Plots a specific variable from the solution on the mesh for a single time step.
 
@@ -25,6 +25,7 @@ def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0):
         title (str, optional): The title of the plot. Defaults to "".
         variable_to_plot (int, optional): The index of the variable to plot.
                                            Defaults to 0 (e.g., density or water height).
+        filename (str, optional): Output PNG path. Defaults to ``Final_<variable>.png``.
     """
     node_coords = np.array(mesh.node_coords)
     x = node_coords[:, 0]
@@ -53,12 +54,12 @@ def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0):
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
     plt.gca().set_aspect("equal", adjustable="box")
-    plt.savefig(f"Final_{variable_to_plot}.png")
+    plt.savefig(filename or f"Final_{variable_to_plot}.png")
     # plt.show()
 
 
 def create_animation(
-    mesh: Mesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
+    mesh: Mesh, history, dt_history, filename="simulation.gif", variable_to_plot=0, show=True
 ):
     """
     Creates and saves an animation of the simulation history.
@@ -71,6 +72,7 @@ def create_animation(
                                 Defaults to "simulation.gif".
         variable_to_plot (int, optional): The index of the variable to plot.
                                            Defaults to 0.
+        show (bool, optional): Open the interactive window. Defaults to True.
     """
     fig, ax = plt.subplots(figsize=(12, 12))
     node_coords = np.array(mesh.node_coords)
@@ -137,7 +139,8 @@ def create_animation(
         repeat_delay=3000,
     )
 
-    # Save or show the animation
-    # anim.save(filename, writer='imagemagick', fps=10)
-    plt.show()
+    if filename:
+        anim.save(filename, writer="pillow", fps=10)
+    if show:
+        plt.show()
     return anim

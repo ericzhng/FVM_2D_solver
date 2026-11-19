@@ -30,11 +30,13 @@ def setup_case_shallow_water(mesh: Mesh):
     x = mesh.cell_centroids[:, 0]
     y = mesh.cell_centroids[:, 1]
 
-    # Create boolean masks for each quadrant (assuming a domain from 0 to 1 in x and y)
-    reg1 = (x >= 50) & (y >= 50)  # Top-right
-    reg2 = (x < 50) & (y >= 50)  # Top-left
-    reg3 = (x < 50) & (y < 50)  # Bottom-left
-    reg4 = (x >= 50) & (y < 50)  # Bottom-right
+    # Quadrants meet at the centre of the bounding box (50, 50 for the 100 x 100 mesh)
+    x_mid = 0.5 * (x.min() + x.max())
+    y_mid = 0.5 * (y.min() + y.max())
+    reg1 = (x >= x_mid) & (y >= y_mid)  # Top-right
+    reg2 = (x < x_mid) & (y >= y_mid)  # Top-left
+    reg3 = (x < x_mid) & (y < y_mid)  # Bottom-left
+    reg4 = (x >= x_mid) & (y < y_mid)  # Bottom-right
 
     # Initialize arrays for primitive variables for all cells
     h = np.zeros(mesh.nelem)
