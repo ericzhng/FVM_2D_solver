@@ -87,6 +87,9 @@ Hot loops are numba-compiled and parallel over cells.
 
 ## Parallel execution
 
+For a step-by-step explanation of the MPI workflow (with diagrams, a worked
+example and a checklist for reusing it), see [PARALLEL_GUIDE.md](PARALLEL_GUIDE.md).
+
 Two levels, which can be combined:
 
 - **Shared memory (numba threads).** Kernels are `prange` loops over blocks of
