@@ -1,4 +1,4 @@
-r"""Module: utility.gmsh_create_cube_uniform_mesh
+r"""Module: utility.mesh_generation.gmsh_create_cube_uniform_mesh
 
 Description: Generates a structured hexahedral mesh of a box with gmsh (transfinite meshing) and
     writes it to a .msh file. Dimensions and divisions are arguments.
@@ -8,9 +8,9 @@ Date: 2025-07-26
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import gmsh
-import sys
 import os
+
+import gmsh
 
 
 def create_and_mesh_cube(

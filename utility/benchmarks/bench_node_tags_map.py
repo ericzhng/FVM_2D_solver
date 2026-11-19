@@ -1,9 +1,9 @@
-r"""Module: utility.bench_node_tags_map
+r"""Module: utility.benchmarks.bench_node_tags_map
 
 Description: Timing comparison of two ways to map gmsh node tags to array indices: a dense
     lookup array and a dictionary, on the saved node tags in data/mesh_arrays/node_tags.npy.
     It first checks that both maps give the same index for every tag, then prints the
-    timings. Run it as a script (``python utility/bench_node_tags_map.py``).
+    timings. Run it as a script (``python utility/benchmarks/bench_node_tags_map.py``).
 
 Author: Hui Zhang
 Date: 2025-07-25
@@ -16,7 +16,7 @@ import time
 import numpy as np
 
 NODE_TAGS_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "data", "mesh_arrays", "node_tags.npy"
+    os.path.dirname(__file__), "..", "..", "data", "mesh_arrays", "node_tags.npy"
 )
 
 

@@ -1,10 +1,10 @@
-r"""Module: utility.bench_centroids
+r"""Module: utility.benchmarks.bench_centroids
 
 Description: Compares three ways to compute cell centroids (vertex means) from the saved mesh
     arrays in data/mesh_arrays/: a loop with a linear node-tag search, a loop with a dense
     tag-to-index map, and a vectorised version. It checks that all three give the same
     centroids, then prints the timings. Run it as a script
-    (``python utility/bench_centroids.py``).
+    (``python utility/benchmarks/bench_centroids.py``).
 
 Author: Hui Zhang
 Date: 2025-07-25
@@ -16,7 +16,7 @@ import time
 
 import numpy as np
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "mesh_arrays")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "mesh_arrays")
 
 
 def load_mesh():

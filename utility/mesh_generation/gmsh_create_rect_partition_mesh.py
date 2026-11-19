@@ -1,4 +1,4 @@
-r"""Module: utility.gmsh_create_rect_partition_mesh
+r"""Module: utility.mesh_generation.gmsh_create_rect_partition_mesh
 
 Description: Generates a rectangular river-channel mesh with gmsh. ``mesh_type`` selects
     structured quadrilaterals or triangles, and the output is written to a .msh file with
@@ -9,9 +9,9 @@ Date: 2025-07-23
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import gmsh
-import sys
 import os
+
+import gmsh
 
 
 def create_and_mesh_rectangle(

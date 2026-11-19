@@ -28,7 +28,7 @@ if MPIEXEC is None and os.name == "nt":
 def test_real_mpi_matches_serial(ranks):
     assert MPIEXEC is not None  # guaranteed by skipif
     script = os.path.join(
-        os.path.dirname(__file__), "..", "..", "utility", "mpi_parity_check.py"
+        os.path.dirname(__file__), "..", "..", "utility", "checks", "mpi_parity_check.py"
     )
     env = dict(os.environ, NUMBA_NUM_THREADS="1")
     env.pop("NUMBA_DISABLE_JIT", None)  # conftest disables the JIT; MPI runs compiled kernels

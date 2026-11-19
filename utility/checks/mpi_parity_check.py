@@ -1,9 +1,9 @@
-r"""Module: utility.mpi_parity_check
+r"""Module: utility.checks.mpi_parity_check
 
 Description: Real-MPI parity check: the distributed solve must equal the serial solve. It covers
     walls and open boundaries, both fluxes and integrators, the adaptive CFL step (allreduce)
     and gathered output. Run it under mpiexec, for example
-    ``mpiexec -n 4 python utility/mpi_parity_check.py``. It exits non-zero on mismatch.
+    ``mpiexec -n 4 python utility/checks/mpi_parity_check.py``. It exits non-zero on mismatch.
 
 Author: Hui Zhang
 Date: 2026-11-18
@@ -17,7 +17,7 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.euler_equations import EulerEquations  # noqa: E402
 from src.mesh import Mesh  # noqa: E402

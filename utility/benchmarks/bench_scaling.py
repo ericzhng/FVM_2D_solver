@@ -1,4 +1,4 @@
-r"""Module: utility.bench_scaling
+r"""Module: utility.benchmarks.bench_scaling
 
 Description: Strong-scaling benchmark and parallel-vs-serial check. It runs serially, with numba
     threads, or with MPI ranks. ``--check`` compares the assembled MPI result with a serial
@@ -14,11 +14,10 @@ import contextlib
 import io
 import os
 import sys
-import time
 
 import numpy as np
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.euler_equations import EulerEquations  # noqa: E402
 from src.mesh import Mesh  # noqa: E402

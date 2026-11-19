@@ -1,4 +1,4 @@
-r"""Module: utility.make_parallel_figures
+r"""Module: utility.figures.make_parallel_figures
 
 Description: Generates the figures used by PARALLEL_GUIDE.md into doc/figures/. Figure 2 is
     computed from the real mesh and partitioner. Figure 5 plots the measured strong-scaling
@@ -22,7 +22,7 @@ from matplotlib.collections import PolyCollection
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch, Rectangle
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
 
 from src.mesh import Mesh  # noqa: E402

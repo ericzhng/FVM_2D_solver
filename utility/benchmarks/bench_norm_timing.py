@@ -1,7 +1,7 @@
-r"""Module: utility.bench_norm_timing
+r"""Module: utility.benchmarks.bench_norm_timing
 
 Description: Micro-benchmark comparing ``np.linalg.norm`` with an explicit square root for a
-    3-vector. Run it as a script (``python utility/bench_norm_timing.py``); it prints the
+    3-vector. Run it as a script (``python utility/benchmarks/bench_norm_timing.py``); it prints the
     timings.
 
 Author: Hui Zhang
@@ -9,8 +9,9 @@ Date: 2025-07-26
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import numpy as np
 import time
+
+import numpy as np
 
 
 def timing_decorator(func):

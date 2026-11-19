@@ -1,4 +1,4 @@
-r"""Module: utility.gmsh_create_polygon_random_mesh
+r"""Module: utility.mesh_generation.gmsh_create_polygon_random_mesh
 
 Description: Generates an unstructured triangular mesh of a polygon given by its node
     coordinates, with gmsh (the default algorithm is meshadapt). The mesh has a fluid surface
@@ -9,9 +9,9 @@ Date: 2025-07-21
 Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
-import gmsh
-import numpy as np
 import os
+
+import gmsh
 
 
 def polygon_geo_to_triangular_mesh(
