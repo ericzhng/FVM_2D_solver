@@ -1,3 +1,15 @@
+r"""Module: src.euler_equations
+
+Description: 2D compressible Euler equations as a numba jitclass. Provides conservative and
+    primitive conversion, the physical flux, the maximum wave speed for the CFL step, ghost
+    states for wall, inlet, outlet and transmissive boundaries, and the Roe and HLLC numerical
+    fluxes. Each flux has an allocation-free ``*_into`` kernel and an array-returning wrapper.
+
+Author: Hui Zhang
+Date: 2025-07-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 from numba import float64
 from numba.experimental import jitclass

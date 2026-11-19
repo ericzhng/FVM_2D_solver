@@ -1,3 +1,14 @@
+r"""Module: tests.test_compute_centroids
+
+Description: Runs three cell-centroid implementations (fastest, current and old loop) on the
+    saved test mesh arrays in tests/*.npy. The current test checks that they run; it does not
+    yet assert that they agree.
+
+Author: Hui Zhang
+Date: 2025-07-25
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 import unittest
 

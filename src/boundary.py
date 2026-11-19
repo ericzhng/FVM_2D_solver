@@ -1,3 +1,14 @@
+r"""Module: src.boundary
+
+Description: Boundary-condition vocabulary and conversion. ``create_numba_bcs`` turns the user's
+    boundary dictionary into a structured array for numba. ``build_face_bcs`` resolves it once
+    into per-face type and value arrays. Type codes: 1 inlet, 2 outlet, 3 wall, 4 transmissive.
+
+Author: Hui Zhang
+Date: 2025-07-26
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 
 # --- Sample BC Dictionary-based Definition ---

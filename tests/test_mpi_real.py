@@ -1,4 +1,12 @@
-"""Run the real-MPI parity check when mpi4py and mpiexec are available."""
+r"""Module: tests.test_mpi_real
+
+Description: pytest wrapper that runs ``tests/mpi_parity.py`` under mpiexec with 2 and 3 ranks.
+    The test is skipped when mpi4py or mpiexec is not available.
+
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
 
 import os
 import shutil

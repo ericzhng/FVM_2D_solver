@@ -1,13 +1,12 @@
-"""Strong-scaling benchmark and parallel-vs-serial check (no gmsh needed).
+r"""Module: utility.bench_scaling
 
-Run serially, with numba threads, or with MPI ranks::
+Description: Strong-scaling benchmark and parallel-vs-serial check. It runs serially, with numba
+    threads, or with MPI ranks. ``--check`` compares the assembled MPI result with a serial
+    solve. Use ``NUMBA_NUM_THREADS=1`` with many ranks per node to avoid oversubscribing cores.
 
-    python utility/bench_scaling.py --n 400 --steps 40
-    mpiexec -n 8 python utility/bench_scaling.py --n 400 --steps 40 --check
-
-Use ``NUMBA_NUM_THREADS=1`` when running many ranks per node (one thread per
-rank) to avoid oversubscribing cores. ``--check`` also solves serially on every
-rank and compares the assembled MPI result with it (slow for big meshes).
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import argparse

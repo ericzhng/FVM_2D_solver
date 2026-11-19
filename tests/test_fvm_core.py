@@ -1,7 +1,13 @@
-"""Regression tests for the FVM core (mesh connectivity, BCs, fluxes, residual).
+r"""Module: tests.test_fvm_core
 
-Uses a tiny in-memory triangle mesh so it runs quickly even when another test
-module has disabled numba's JIT.
+Description: Regression tests on small in-memory meshes. They cover mesh connectivity and the
+    face table, boundary data, free-stream preservation, global conservation, least-squares
+    gradient accuracy (including near walls), limiter range, Roe shear-wave upwinding, ghost
+    states, area centroids and the ``save_every`` option.
+
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import os

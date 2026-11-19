@@ -1,3 +1,15 @@
+r"""Module: utility.others.unstructured_mesh
+
+Description: ``UnstructuredMesh`` computes cell and face centres, volumes, areas and normals for
+    a 2D or 3D mesh. ``generate_random_mesh`` builds it from random points with a Delaunay
+    triangulation. The file also contains two generation self-checks, ``test_mesh2d_generation``
+    and ``test_mesh3d_generation``, which print diagnostics.
+
+Author: Hui Zhang
+Date: 2025-06-19
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt

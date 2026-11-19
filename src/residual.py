@@ -1,9 +1,13 @@
-"""Spatial residual: MUSCL face states + Riemann flux summed per cell.
+r"""Module: src.residual
 
-``compute_residual`` is the only entry point the time integrators need. It
-chains gradient -> limiter -> per-face flux -> per-cell gather and returns
-``R_i = 1/V_i * sum_f F_f A_f`` (each face flux is evaluated once), so the
-explicit update is ``U - dt * R``.
+Description: Spatial residual R(U). The chain is gradient, then limiter, then one MUSCL
+    reconstruction and Riemann flux per unique face, then a per-owned-cell gather with face
+    signs. ``compute_residual`` is the only entry point the time integrators need. Flux names
+    are ``roe`` and ``hllc``. Gradient methods are ``least_squares`` and ``green_gauss``.
+
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import numba

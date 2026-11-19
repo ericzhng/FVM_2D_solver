@@ -1,22 +1,22 @@
-"""Slope limiters for the MUSCL reconstruction.
+r"""Module: src.limiters
 
-Both limiters are *bound-based* (Barth-Jespersen family): for every face the
-gradient-extrapolated change ``diff = grad . r_face`` is compared with the
-largest admissible change ``dmax = U_bound - U_i`` (``U_bound`` is the max/min
-over the cell and its neighbours, chosen by the sign of ``diff``). Both have the
-same sign, and the limiter returns ``phi`` in ``[0, 1]``.
+Description: Bound-based slope limiters for the MUSCL reconstruction. For each face the
+    gradient-extrapolated change is compared with the largest admissible change toward the
+    cell's neighbour bounds. ``barth_jespersen`` is sharp but non-differentiable.
+    ``venkatakrishnan`` is a smooth variant. ``minmod`` is a deprecated alias of
+    ``barth_jespersen``. Limiters are selected by integer code so numba compiles a single
+    kernel.
 
-* ``barth_jespersen``: ``min(1, dmax / diff)`` - sharp, but non-differentiable
-  (can stall convergence to steady state).
-* ``venkatakrishnan``: smooth variant; ``eps2 = (K h)^3`` switches the limiter
-  off in nearly-uniform regions.
+Example:
+    >>> from src.limiters import limiter_code
+    >>> limiter_code("minmod") == limiter_code("barth_jespersen")
+    True
+    >>> limiter_code("venkatakrishnan")
+    1
 
-Classic ratio limiters (minmod, superbee) are *not* meaningful in this
-formulation: ``r = dmax / diff >= 0`` made minmod identical to Barth-Jespersen
-and let superbee exceed 1, violating the bound. They were removed;
-``"minmod"`` is kept as a deprecated alias of Barth-Jespersen.
-
-Limiters are chosen by integer code so numba compiles a single kernel.
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import numba

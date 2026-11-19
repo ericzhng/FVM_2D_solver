@@ -1,7 +1,13 @@
-"""Second-order reconstruction: cell gradients (least squares or Green-Gauss) and limiting.
+r"""Module: src.reconstruction
 
-All kernels are cell-parallel numba loops that read the static geometry from a
-:class:`src.mesh.FVMGeometry` bundle and write one entry per cell.
+Description: Second-order reconstruction kernels: least-squares gradients (the default, which
+    use boundary ghost states), Green-Gauss gradients with an optional non-orthogonal
+    correction, and bound-based slope limiting. All kernels are cell-parallel numba loops over
+    ``geo.grad_cells``.
+
+Author: Hui Zhang
+Date: 2025-07-11
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import numba

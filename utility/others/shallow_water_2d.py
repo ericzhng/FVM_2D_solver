@@ -1,3 +1,14 @@
+r"""Module: utility.others.shallow_water_2d
+
+Description: Experimental 2D shallow-water solver on unstructured meshes. It has Manning
+    friction, wet and dry handling, ghost-cell boundaries, MUSCL gradient reconstruction with
+    slope limiting, and coupling to a 1D river domain. It is not used by ``src/``.
+
+Author: Hui Zhang
+Date: 2025-06-19
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 

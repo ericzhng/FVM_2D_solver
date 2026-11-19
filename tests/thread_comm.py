@@ -1,9 +1,12 @@
-"""In-process stand-in for MPI: ranks are threads sharing a barrier.
+r"""Module: tests.thread_comm
 
-Implements the communicator interface of :mod:`src.parallel` so decomposition,
-halo exchange and the distributed solver can be tested without an MPI runtime.
-Use with ``NUMBA_DISABLE_JIT=1`` (numba's default threading layer is not safe
-for concurrent parallel regions from several Python threads).
+Description: Thread-based stand-in for MPI. It implements the same communicator methods as
+    ``src/parallel.py`` so the distributed logic can be tested without an MPI runtime.
+    ``run_ranks`` starts one thread per rank.
+
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import threading

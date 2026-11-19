@@ -1,3 +1,15 @@
+r"""Module: main
+
+Description: Entry point. Reads the mesh (data/euler_mesh.msh), sets up the case chosen by
+    ``equation_type`` (Euler Riemann problem or shallow water), runs the solver serially or
+    distributed (``get_comm`` picks MPI when launched with mpiexec), then writes an animation
+    and final-state plots.
+
+Author: Hui Zhang
+Date: 2025-07-11
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 from typing import Any
 
 from src.mesh import Mesh, plot_mesh  # noqa: F401

@@ -1,15 +1,22 @@
-"""Communicator abstraction for distributed-memory runs.
+r"""Module: src.parallel
 
-The solver only needs four operations, so any object providing them works:
+Description: Communicator interface for distributed runs: ``rank``, ``size``, ``allreduce_min``,
+    ``alltoall``, ``exchange`` (halo refresh) and ``gather``. ``SerialComm`` is the no-op
+    default. ``MPIComm`` wraps mpi4py with non-blocking halo exchange. ``get_comm`` returns
+    ``MPIComm`` when mpi4py is importable. ``Communicator`` is the typing protocol the solver
+    depends on.
 
-* ``rank`` / ``size``
-* ``allreduce_min(x)``: global minimum of a float (CFL time step)
-* ``alltoall(list)``: one picklable object to / from every rank (setup only)
-* ``exchange(U, send, recv)``: refresh the ghost rows of ``U`` in place
-* ``gather(obj)``: collect one object per rank on rank 0 (``None`` elsewhere)
+Example:
+    >>> from src.parallel import SerialComm
+    >>> comm = SerialComm()
+    >>> comm.rank, comm.size
+    (0, 1)
+    >>> comm.allreduce_min(3.5)
+    3.5
 
-:class:`SerialComm` is the default; :class:`MPIComm` wraps mpi4py (imported
-lazily, so the package works without MPI installed).
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 from typing import Any, Protocol

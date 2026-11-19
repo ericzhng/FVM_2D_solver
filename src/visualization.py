@@ -1,3 +1,14 @@
+r"""Module: src.visualization
+
+Description: matplotlib output. ``plot_simulation_step`` draws one state variable on the mesh
+    and saves a PNG. ``create_animation`` animates one variable over the solution history and
+    returns the animation object.
+
+Author: Hui Zhang
+Date: 2025-07-11
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np

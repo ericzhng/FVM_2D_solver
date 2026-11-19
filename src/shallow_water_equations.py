@@ -1,3 +1,15 @@
+r"""Module: src.shallow_water_equations
+
+Description: 2D shallow water equations as a numba jitclass. Provides conservative and primitive
+    conversion, the flux, the maximum wave speed, ghost states for wall, inlet and outlet
+    boundaries (the outlet prescribes water depth), and HLLC and Roe fluxes. The ``*_into``
+    adapters write into a buffer but are not yet allocation-free.
+
+Author: Hui Zhang
+Date: 2025-07-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 from numba import float64
 from numba.experimental import jitclass

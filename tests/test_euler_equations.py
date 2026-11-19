@@ -1,3 +1,15 @@
+r"""Module: tests.test_euler_equations
+
+Description: Unit tests for the Euler flux kernels. They check flux consistency F(U, U),
+    upwinding of supersonic flow, agreement of Roe and HLLC on a jump, and agreement of the
+    optimised kernels with ``tests/reference_fluxes.py`` on random states. JIT is disabled at
+    import.
+
+Author: Hui Zhang
+Date: 2025-07-25
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import unittest
 import numpy as np
 import sys

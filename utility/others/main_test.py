@@ -1,3 +1,14 @@
+r"""Module: utility.others.main_test
+
+Description: Example driver that combines the 2D unstructured mesh, the shallow-water solver and
+    the 1D water domain. It uses relative imports, so run it as a module of the
+    ``utility.others`` package rather than as a plain script.
+
+Author: Hui Zhang
+Date: 2025-06-19
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 from .unstructured_mesh import generate_random_mesh
 from .shallow_water_2d import ShallowWaterSolver

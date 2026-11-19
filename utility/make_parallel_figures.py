@@ -1,14 +1,13 @@
-"""Generate the figures used by PARALLEL_GUIDE.md into doc/figures/.
+r"""Module: utility.make_parallel_figures
 
-    python utility/make_parallel_figures.py
+Description: Generates the figures used by PARALLEL_GUIDE.md into doc/figures/. Figure 2 is
+    computed from the real mesh and partitioner. Figure 5 plots the measured strong-scaling
+    numbers recorded in ARCHITECTURE.md. Figures 1, 3 and 4 are schematics. Colours follow the
+    validated reference palette.
 
-Figures 2 (partitioned mesh) is computed from the real mesh + partitioner;
-figure 5 plots the measured strong-scaling numbers recorded in ARCHITECTURE.md.
-Figures 1, 3 and 4 are schematics.
-
-Colours follow the validated reference palette (categorical slots 1-4; the
-validator passes for these sets, with a low-contrast warning on aqua/yellow that
-is answered by direct labels everywhere).
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import os

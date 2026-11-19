@@ -1,4 +1,15 @@
-"""Explicit finite-volume time-marching loop."""
+r"""Module: src.solver
+
+Description: Explicit finite-volume time-marching loop ``solve``. Geometry, face boundary
+    conditions and the domain are built once. Each step computes a CFL time step (global minimum
+    over ranks), then advances with RK2 or Euler. A halo exchange happens before every residual
+    evaluation. States are stored every ``save_every`` steps. The solver runs serially or
+    distributed, depending on ``comm``.
+
+Author: Hui Zhang
+Date: 2025-07-11
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
 
 import time
 from functools import partial

@@ -1,11 +1,12 @@
-"""Real-MPI parity check: distributed solve must equal the serial solve.
+r"""Module: tests.mpi_parity
 
-Run under MPI (needs mpi4py)::
+Description: Real-MPI parity check: the distributed solve must equal the serial solve. It covers
+    walls and open boundaries, both fluxes and integrators, the adaptive CFL step (allreduce)
+    and gathered output. Run it under mpiexec. It exits non-zero on mismatch.
 
-    mpiexec -n 4 python tests/mpi_parity.py
-
-Exercises walls + open boundaries, both fluxes and integrators, the adaptive
-CFL step (allreduce) and ``save_every`` gathering. Exits non-zero on mismatch.
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import contextlib

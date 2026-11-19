@@ -1,3 +1,14 @@
+r"""Module: src.case_setup
+
+Description: Initial conditions and boundary dictionaries for the demo cases: a 2D four-quadrant
+    Riemann problem for shallow water and one for the Euler equations. Each quadrant is selected
+    by masks on the cell centroids. Both use transmissive boundaries on all four sides.
+
+Author: Hui Zhang
+Date: 2025-07-11
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 from typing import Dict, Union
 import numpy as np
 from src.mesh import Mesh

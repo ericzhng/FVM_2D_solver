@@ -1,3 +1,23 @@
+r"""Module: src.mesh
+
+Description: Mesh reading and geometry. ``Mesh.read_mesh`` loads gmsh .msh files (gmsh is
+    imported lazily). ``analyze_mesh`` computes centroids (area centroids in 2D), cell volumes,
+    a unique-face table with neighbours, outward normals, face areas and least-squares gradient
+    coefficients. ``fvm_geometry`` exports the 2D arrays used by the numba kernels as
+    ``FVMGeometry``. ``Mesh.unit_square`` builds a gmsh-free triangle mesh for tests and
+    benchmarks. ``plot_mesh`` draws elements and normals for inspection.
+
+Example:
+    >>> from src.mesh import Mesh
+    >>> mesh = Mesh.unit_square(2)
+    >>> mesh.nelem, mesh.dim
+    (8, 2)
+
+Author: Hui Zhang
+Date: 2025-07-11
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 from typing import NamedTuple
 
 import numpy as np

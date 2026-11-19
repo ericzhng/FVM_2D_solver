@@ -1,3 +1,14 @@
+r"""Module: utility.gmsh_create_polygon_random_mesh
+
+Description: Generates an unstructured triangular mesh of a polygon given by its node
+    coordinates, with gmsh (the default algorithm is meshadapt). The mesh has a fluid surface
+    group and a walls group, and is written to a .msh file.
+
+Author: Hui Zhang
+Date: 2025-07-21
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import gmsh
 import numpy as np
 import os

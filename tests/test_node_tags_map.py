@@ -1,3 +1,14 @@
+r"""Module: tests.test_node_tags_map
+
+Description: Timing comparison of two ways to map gmsh node tags to array indices: a dense
+    lookup array and a dictionary, on the saved node tags. It prints timings and asserts
+    nothing.
+
+Author: Hui Zhang
+Date: 2025-07-25
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 import time
 import unittest

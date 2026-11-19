@@ -1,3 +1,14 @@
+r"""Module: tests.test_norm_timing
+
+Description: Micro-benchmark comparing ``np.linalg.norm`` with an explicit square root for a
+    3-vector. It runs and prints at import, so it is a benchmark script rather than a pytest
+    test.
+
+Author: Hui Zhang
+Date: 2025-07-26
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 import time
 

@@ -1,4 +1,13 @@
-"""Time-step selection (CFL) and explicit time integrators."""
+r"""Module: src.time_step
+
+Description: CFL time-step selection (a parallel minimum over cells) and explicit time
+    integrators: forward Euler and second-order strong-stability-preserving Runge-Kutta (Heun),
+    with fused update kernels. ``INTEGRATORS`` maps the names to the step functions.
+
+Author: Hui Zhang
+Date: 2025-07-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
 
 import numba
 import numpy as np

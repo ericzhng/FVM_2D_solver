@@ -1,4 +1,14 @@
-"""Domain decomposition and distributed solver tests (thread-simulated ranks)."""
+r"""Module: tests.test_parallel
+
+Description: Decomposition and distributed-solver tests with thread-simulated ranks. They cover
+    balanced RCB partitions, every cell owned exactly once, symmetric halo plans, and
+    distributed results equal to serial for 2 to 4 ranks. JIT is disabled at import (see
+    ``tests/thread_comm.py``).
+
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
 
 import os
 import sys

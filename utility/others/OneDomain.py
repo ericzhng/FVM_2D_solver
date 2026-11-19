@@ -1,3 +1,14 @@
+r"""Module: utility.others.OneDomain
+
+Description: One-dimensional water-domain class ``OneDWaterDomain``, which holds depth,
+    velocity, bed and discharge along a river reach. It is a 1D model coupled to the 2D solver
+    in ``shallow_water_2d.py``. It is experimental and not used by ``src/``.
+
+Author: Hui Zhang
+Date: 2025-06-19
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 

@@ -1,3 +1,14 @@
+r"""Module: utility.gmsh_create_rect_uniform_mesh
+
+Description: Generates a structured quadrilateral mesh of a rectangle with gmsh (transfinite
+    meshing). The left, right, bottom and top boundary groups and the fluid group are written to
+    a .msh file.
+
+Author: Hui Zhang
+Date: 2025-07-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
+"""
+
 import gmsh
 import sys
 import os

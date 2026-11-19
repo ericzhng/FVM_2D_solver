@@ -1,20 +1,21 @@
-"""Domain decomposition: cell partitioning, halo layers and exchange plans.
+r"""Module: src.partition
 
-Every rank reads and analyses the *global* mesh (O(N) memory per rank, fine up
-to a few million cells) and then keeps only its subdomain:
+Description: Domain decomposition. ``partition_rcb`` splits the cells by recursive coordinate
+    bisection. ``build_domain`` cuts the global geometry down to one rank's subdomain: owned
+    cells, two halo rings, local numbering in ascending global id, a face table restricted to
+    faces that touch owned cells, and the send/receive plan from one all-to-all. ``Domain``
+    holds the local data and the exchange and gather methods.
 
-    owned cells  +  halo ring 1  +  halo ring 2
+Example:
+    >>> import numpy as np
+    >>> from src.partition import partition_rcb
+    >>> centroids = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    >>> partition_rcb(centroids, 2).tolist()
+    [0, 1, 0, 1]
 
-Two rings make one exchange of ``U`` per residual evaluation sufficient:
-gradients and limiters are computed on owned + ring-1 cells (they read ring 2),
-and fluxes of faces touching an owned cell read ring-1 gradients/limiters.
-Nothing else is computed (ring-2 gradients and ring-only faces are skipped). Local cells are kept
-in ascending *global* id order, so the owner of every shared face (lowest local
-index) is the same cell as in a serial run, and results are reproducible
-independent of the rank count (up to round-off in the time-step reduction).
-
-Ring-2 cells are only read, never trusted: their own residual is discarded and
-their faces towards missing cells are treated as transmissive boundaries.
+Author: Hui Zhang
+Date: 2026-11-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 from dataclasses import dataclass, field

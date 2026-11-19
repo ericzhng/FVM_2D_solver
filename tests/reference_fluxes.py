@@ -1,7 +1,12 @@
-"""Straightforward array-based reference fluxes for the Euler equations (tests only).
+r"""Module: tests.reference_fluxes
 
-Deliberately simple and allocation-heavy; the production kernels in
-``src/euler_equations.py`` must agree with these.
+Description: Plain array-based Roe and HLLC fluxes for the Euler equations. They are
+    deliberately simple and serve as an independent check on the optimised kernels in
+    ``src/euler_equations.py``.
+
+Author: Hui Zhang
+Date: 2025-07-18
+Copyright: (c) 2026 Hui Zhang. All rights reserved.
 """
 
 import numpy as np
