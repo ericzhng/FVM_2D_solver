@@ -1,10 +1,10 @@
-r"""Module: tests.test_parallel
+r"""Module: integration_tests.test_distributed_threads
 
-Description: Decomposition and distributed-solver tests with thread-simulated ranks. They cover
-    balanced RCB partitions, every cell owned exactly once, symmetric halo plans, and
-    distributed results equal to serial for 2 to 4 ranks. Ranks are threads sharing a barrier
-    (``ThreadComm``), so no MPI runtime is needed. JIT is disabled at import because numba's
-    default threading layer is not safe for concurrent parallel regions from several threads.
+Description: Integration tests of the domain decomposition and the distributed solver with
+    thread-simulated ranks (``ThreadComm``): every cell is owned exactly once, halo plans
+    are symmetric, and distributed results equal the serial run for 2 to 4 ranks. JIT is
+    disabled at import because numba's default threading layer is not safe for concurrent
+    parallel regions from several Python threads.
 
 Author: Hui Zhang
 Date: 2026-11-18
@@ -21,13 +21,11 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-sys.path.insert(0, os.path.dirname(__file__))
-
-from test_fvm_core import cons, make_grid_mesh  # noqa: E402
 
 from src.boundary import build_face_bcs, create_numba_bcs  # noqa: E402
 from src.euler_equations import EulerEquations  # noqa: E402
-from src.partition import build_domain, partition_rcb  # noqa: E402
+from src.mesh import Mesh  # noqa: E402
+from src.partition import build_domain  # noqa: E402
 from src.solver import solve  # noqa: E402
 
 # --- In-process stand-in for MPI: ranks are threads sharing a barrier ---------
@@ -115,6 +113,10 @@ BC = {
 }
 
 
+def cons(r, u, v, p, gamma=1.4):
+    return np.array([r, r * u, r * v, p / (gamma - 1) + 0.5 * r * (u * u + v * v)])
+
+
 def initial_state(mesh):
     """Discontinuity plus a smooth perturbation so every rank sees real dynamics."""
     x, y = mesh.cell_centroids[:, 0], mesh.cell_centroids[:, 1]
@@ -126,17 +128,8 @@ def initial_state(mesh):
     return np.array(rows)
 
 
-@pytest.mark.parametrize("nparts", [2, 3, 5, 8])
-def test_rcb_partition_is_balanced_and_complete(nparts):
-    m = make_grid_mesh(10)
-    part = partition_rcb(m.cell_centroids, nparts)
-    counts = np.bincount(part, minlength=nparts)
-    assert counts.sum() == m.nelem and (counts > 0).all()
-    assert counts.max() - counts.min() <= 2
-
-
 def test_domains_cover_mesh_and_halo_plan_is_symmetric():
-    m = make_grid_mesh(8)
+    m = Mesh.unit_square(8)
     geo = m.fvm_geometry()
     bt, bv = build_face_bcs(m, create_numba_bcs(BC, m.boundary_tag_map))
     size = 4
@@ -159,7 +152,7 @@ def test_domains_cover_mesh_and_halo_plan_is_symmetric():
 @pytest.mark.parametrize("size", [2, 3, 4])
 @pytest.mark.parametrize("integration", ["rk2", "euler"])
 def test_distributed_solve_matches_serial(size, integration):
-    m = make_grid_mesh(8)
+    m = Mesh.unit_square(8)
     eq = EulerEquations(1.4)
     U0 = initial_state(m)
     kw = dict(

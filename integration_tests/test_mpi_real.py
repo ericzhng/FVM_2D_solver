@@ -1,4 +1,4 @@
-r"""Module: tests.test_mpi_real
+r"""Module: integration_tests.test_mpi_real
 
 Description: pytest wrapper that runs ``utility/mpi_parity_check.py`` under mpiexec with 2 and 3
     ranks. The test is skipped when mpi4py or mpiexec is not available.

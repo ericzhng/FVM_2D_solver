@@ -1,9 +1,9 @@
 r"""Module: tests.test_fvm_core
 
-Description: Regression tests on small in-memory meshes. They cover mesh connectivity and the
-    face table, boundary data, free-stream preservation, global conservation, least-squares
-    gradient accuracy (including near walls), limiter range, Roe shear-wave upwinding, ghost
-    states, area centroids and the ``save_every`` option.
+Description: Unit tests for the FVM building blocks on small in-memory meshes. They cover
+    neighbour and face tables, per-face boundary data, least-squares and Green-Gauss
+    gradients (including near walls), limiter range and names, Roe shear-wave upwinding,
+    ghost states of the Euler and shallow-water equations, and area centroids.
 
 Author: Hui Zhang
 Date: 2026-11-18
@@ -23,9 +23,7 @@ from src.euler_equations import EulerEquations  # noqa: E402
 from src.limiters import limiter_code  # noqa: E402
 from src.mesh import Mesh  # noqa: E402
 from src.reconstruction import compute_gradients_gaussian, compute_gradients_lsq  # noqa: E402
-from src.residual import compute_residual  # noqa: E402
 from src.shallow_water_equations import ShallowWaterEquations  # noqa: E402
-from src.solver import solve  # noqa: E402
 
 
 def make_grid_mesh(n=4):
@@ -66,22 +64,6 @@ def test_face_bcs_cover_every_boundary_face_regardless_of_node_order():
     # left faces have x-midpoint 0 -> inlet with the requested velocity
     left = free & np.isclose(m.face_midpoints[..., 0], 0)
     assert (bc_type[left] == 1).all() and (bc_value[left][:, 0] == 1.0).all()
-
-
-@pytest.mark.parametrize("flux", ["roe", "hllc"])
-@pytest.mark.parametrize("limiter", ["barth_jespersen", "venkatakrishnan"])
-def test_uniform_flow_has_zero_residual(flux, limiter):
-    m = make_grid_mesh()
-    eq = EulerEquations(1.4)
-    U = np.tile(cons(1.0, 0.3, -0.2, 1.0), (m.nelem, 1))
-    bcs = create_numba_bcs(
-        {k: {"type": "transmissive"} for k in m.boundary_tag_map}, m.boundary_tag_map
-    )
-    bc_type, bc_value = build_face_bcs(m, bcs)
-    R = compute_residual(
-        U, m.fvm_geometry(), eq, bc_type, bc_value, limiter, flux, over_relaxation=1.0
-    )
-    assert np.abs(R).max() < 1e-12
 
 
 def test_roe_pure_shear_is_upwinded_exactly():
@@ -154,27 +136,6 @@ def test_face_table_is_consistent():
     assert (geo.face_id[geo.owner_cell, geo.owner_local] == np.arange(nf_u)).all()
 
 
-def test_wall_domain_conserves_mass_and_energy():
-    """Sum of V*R over a closed (wall) domain telescopes to ~0 for mass/energy."""
-    m = make_grid_mesh(6)
-    eq = EulerEquations(1.4)
-    x, y = m.fvm_geometry().centroids.T
-    U = np.stack(
-        [
-            1.0 + 0.3 * np.sin(4 * x) * np.cos(3 * y),
-            0.2 * np.ones_like(x),
-            -0.1 * np.ones_like(x),
-            3.0 + 0.2 * np.cos(5 * x * y),
-        ],
-        axis=1,
-    )
-    bcs = create_numba_bcs({k: {"type": "wall"} for k in m.boundary_tag_map}, m.boundary_tag_map)
-    bc_type, bc_value = build_face_bcs(m, bcs)
-    R = compute_residual(U, m.fvm_geometry(), eq, bc_type, bc_value, flux="hllc")
-    total = (m.cell_volumes[:, None] * R).sum(axis=0)
-    assert abs(total[0]) < 1e-12 and abs(total[3]) < 1e-12
-
-
 def test_euler_inlet_outlet_ghost_states_are_physical():
     eq = EulerEquations(1.4)
     U = cons(1.5, 0.5, 0.0, 2.0)
@@ -207,18 +168,6 @@ def test_area_centroid_of_trapezoid():
     m.nnode, m.nelem, m.dim = 4, 1, 2
     m.analyze_mesh()
     np.testing.assert_allclose(m.cell_centroids[0, :2], [2.0, 8.0 / 9.0])
-
-
-def test_solve_save_every_keeps_total_time_and_final_state():
-    m = make_grid_mesh(4)
-    eq = EulerEquations(1.4)
-    U0 = np.tile(cons(1.0, 0.3, 0.0, 1.0), (m.nelem, 1))
-    bc = {k: {"type": "transmissive"} for k in m.boundary_tag_map}
-    full, dts_full = solve(m, U0, bc, eq, t_end=0.5, save_every=1)
-    sparse, dts_sparse = solve(m, U0, bc, eq, t_end=0.5, save_every=3)
-    assert len(sparse) < len(full)
-    assert sum(dts_sparse) == pytest.approx(0.5) and sum(dts_full) == pytest.approx(0.5)
-    np.testing.assert_allclose(sparse[-1], full[-1])
 
 
 def test_near_wall_gradient_honours_reflection_ghost():
@@ -259,9 +208,7 @@ def test_limiter_with_wall_ghosts_stays_in_range():
     geo = m.fvm_geometry()
     x, y = geo.centroids.T
     U = np.stack([1 + 0.3 * x, 0.5 + 0.2 * x, 0.4 * y, 3 + 0.1 * x], axis=1)
-    bcs = create_numba_bcs(
-        {k: {"type": "wall"} for k in m.boundary_tag_map}, m.boundary_tag_map
-    )
+    bcs = create_numba_bcs({k: {"type": "wall"} for k in m.boundary_tag_map}, m.boundary_tag_map)
     bt, bv = build_face_bcs(m, bcs)
     eq = EulerEquations(1.4)
     g = compute_gradients_lsq(geo, U, eq, bt, bv)

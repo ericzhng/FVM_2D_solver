@@ -404,8 +404,8 @@ for step in range(nsteps):
 | Halo exchange, gather | `Domain.exchange`, `Domain.gather`; `MPIComm.exchange` (`Isend`/`Irecv`/`Waitall`) |
 | Time loop, global `dt`, residual wrapper | [src/solver.py](src/solver.py): `solve` |
 | Serial numerics (unchanged by MPI) | [src/residual.py](src/residual.py), [src/reconstruction.py](src/reconstruction.py), [src/time_step.py](src/time_step.py) |
-| Fake ranks for tests | `ThreadComm` inside [tests/test_parallel.py](tests/test_parallel.py) |
-| Parallel tests | [tests/test_parallel.py](tests/test_parallel.py) (thread ranks), [utility/mpi_parity_check.py](utility/mpi_parity_check.py) + [tests/test_mpi_real.py](tests/test_mpi_real.py) (real MPI) |
+| Fake ranks for tests | `ThreadComm` inside [integration_tests/test_distributed_threads.py](integration_tests/test_distributed_threads.py) |
+| Parallel tests | [integration_tests/test_distributed_threads.py](integration_tests/test_distributed_threads.py) (thread ranks), [utility/mpi_parity_check.py](utility/mpi_parity_check.py) + [integration_tests/test_mpi_real.py](integration_tests/test_mpi_real.py) (real MPI) |
 | Scaling benchmark | [utility/bench_scaling.py](utility/bench_scaling.py) |
 | Figures | [utility/make_parallel_figures.py](utility/make_parallel_figures.py) |
 
@@ -452,7 +452,7 @@ pip install -r requirements-mpi.txt              # mpi4py; needs an MPI runtime 
 NUMBA_NUM_THREADS=1 mpiexec -n 4 python main.py                 # run the solver
 NUMBA_NUM_THREADS=1 mpiexec -n 4 python utility/mpi_parity_check.py   # distributed == serial
 NUMBA_NUM_THREADS=1 mpiexec -n 8 python utility/bench_scaling.py --n 300 --steps 40
-python -m pytest tests                                          # fake ranks; real-MPI tests skip if unavailable
+python -m pytest tests integration_tests                         # fake ranks; real-MPI test skips if unavailable
 python utility/make_parallel_figures.py                         # regenerate doc/figures
 ```
 

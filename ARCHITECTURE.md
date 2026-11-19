@@ -57,9 +57,9 @@ Hot loops are numba-compiled and parallel over cells.
 | `case_setup.py` | Initial conditions and BC dictionaries for the demo cases. |
 | `visualization.py` | Matplotlib snapshots and animation. |
 
-`main.py` is the script entry point; `utility/` holds gmsh mesh generators and
-`bench_scaling.py` (benchmark / parallel-vs-serial check);
-`tests/` is pytest.
+`main.py` is the script entry point; `utility/` holds standalone tools (gmsh mesh
+generators, benchmarks, checks); `tests/` holds unit tests and `integration_tests/`
+the integration tests (both pytest). See [Testing and tools](#testing-and-tools).
 
 ## Conventions
 
@@ -187,19 +187,21 @@ helps: each rank's working set is small and cache-resident.
   not overlapped with computation; the shallow-water fluxes are not yet
   allocation-free.
 - The distributed logic is verified two ways: thread-simulated ranks
-  (`ThreadComm` in `tests/test_parallel.py`, runs everywhere, also with compiled numba kernels)
-  and real MPI (`utility/mpi_parity_check.py`, run by `tests/test_mpi_real.py` when
+  (`ThreadComm` in `integration_tests/test_distributed_threads.py`, runs everywhere, also with compiled numba kernels)
+  and real MPI (`utility/mpi_parity_check.py`, run by `integration_tests/test_mpi_real.py` when
   `mpi4py` + `mpiexec` exist, skipped otherwise). On Microsoft MPI 10.1 +
   mpi4py 4.1 the distributed result equals the serial one **exactly** (max
   difference 0.0) on 2, 3, 4 and 6 ranks, for Roe/HLLC, RK2/Euler, adaptive
   CFL (allreduce) and gathered states.
 
-## Testing
+## Testing and tools
 
-`python -m pytest tests`. `tests/test_fvm_core.py` uses small in-memory meshes
-and covers: neighbour search and the unique-face table, per-face BC resolution,
-free-stream preservation, global conservation, least-squares exactness on a
-skewed mesh, near-wall gradient exactness, Roe shear-wave upwinding, inlet/outlet ghost states, area
-centroids, `save_every`, partitioning/halo plans and
-distributed-vs-serial equality (`tests/test_parallel.py`). `tests/test_euler_equations.py` checks flux
-consistency and upwinding.
+Tests are split by what they exercise:
+
+| Folder | Contents | Run |
+| --- | --- | --- |
+| `tests/` | **Unit tests**: one function or class in isolation, fast. `test_fvm_core.py` (mesh and face tables, per-face BCs, gradients incl. near walls, limiters, ghost states, centroids), `test_euler_equations.py` (Roe/HLLC flux properties and agreement with a plain reference), `test_partition.py` (RCB partitioner). | `python -m pytest tests` |
+| `integration_tests/` | **Integration and workflow tests**: several modules together or a full run. `test_residual_pipeline.py` (free-stream preservation, global conservation), `test_solver_workflow.py` (serial solve, `save_every`), `test_distributed_threads.py` (domain/halo plans and distributed == serial with thread-simulated ranks), `test_mpi_real.py` (real MPI via `utility/mpi_parity_check.py`; skipped without mpi4py/mpiexec). | `python -m pytest integration_tests` |
+| `utility/` | **Standalone tools**, runnable on their own: gmsh mesh generators, `bench_scaling.py`, `mpi_parity_check.py`, `make_parallel_figures.py`, and the micro-benchmarks `bench_centroids.py`, `bench_node_tags_map.py`, `bench_norm_timing.py`. The first two benchmarks read sample arrays from `data/mesh_arrays/`. | `python utility/<tool>.py` |
+
+CI runs both test folders as separate steps.
